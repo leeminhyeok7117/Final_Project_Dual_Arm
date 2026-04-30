@@ -25,6 +25,7 @@ install(PROGRAMS
   src/calibrate_origin_keyboard.py
   src/action.py
   src/client.py
+  src/teleoperate.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

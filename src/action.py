@@ -23,7 +23,7 @@ RIGHT_JOINT_NAME_TO_ID = {
 }
 RIGHT_GEAR_RATIOS   = {1: 15, 2: 15, 3: 5, 4: 5, 5: 1, 6: 1, 7: 1}
 # URDF rot_R3/R4/R5/R6 axis=-Z (대칭 반전) → 단일팔 대비 방향 반전 적용
-RIGHT_DIRECTION_MAP = {1: 1, 2: 1, 3: 1, 4: -1, 5: -1, 6: -1, 7: 1}
+RIGHT_DIRECTION_MAP = {1: 1, 2: 1, 3: 1, 4: 1, 5: -1, 6: 1, 7: 1}
 
 # ── 왼팔: 모터 ID 11-17 ──────────────────────────────────────────────────────
 # rot_L1→11, rot_L2→12, rot_L3→13, rot_L4→14, rot_L5→15, rot_L6→16, gripper_L→17
@@ -34,7 +34,7 @@ LEFT_JOINT_NAME_TO_ID = {
 }
 LEFT_GEAR_RATIOS   = {11: 15, 12: 15, 13: 5, 14: 5, 15: 1, 16: 1, 17: 1}
 # URDF rot_L3/L4/L5/L6 axis=+Z → 단일팔과 동일 방향
-LEFT_DIRECTION_MAP = {11: 1, 12: 1, 13: -1, 14: 1, 15: 1, 16: 1, 17: -1}
+LEFT_DIRECTION_MAP = {11: -1, 12: -1, 13: -1, 14: -1, 15: 1, 16: -1, 17: 1}
 
 
 class DualArmActionServer(Node):
@@ -53,9 +53,14 @@ class DualArmActionServer(Node):
         self.right_sync_write = GroupSyncWrite(self.portHandler, self.packetHandler, 116, 4)
         self.left_sync_write  = GroupSyncWrite(self.portHandler, self.packetHandler, 116, 4)
 
+        #퍼블리시용 오류 안생기게 하기 용도
         self.initial_motor_pulses = {}
-        self.right_joints = list(RIGHT_JOINT_NAME_TO_ID.keys())
-        self.left_joints  = list(LEFT_JOINT_NAME_TO_ID.keys())
+        self.right_joints = [j for j in RIGHT_JOINT_NAME_TO_ID.keys() if 'gripper' not in j]
+        self.left_joints  = [j for j in LEFT_JOINT_NAME_TO_ID.keys()  if 'gripper' not in j]
+
+        #그리퍼 제어할때는 이거사용
+        self.right_all_joints = list(RIGHT_JOINT_NAME_TO_ID.keys())
+        self.left_all_joints  = list(LEFT_JOINT_NAME_TO_ID.keys())
 
         self.capture_current_state_as_origin()
 
@@ -84,10 +89,23 @@ class DualArmActionServer(Node):
         self.get_logger().info('🤖 양팔 다이나믹셀 액션 서버 가동 완료! 명령을 기다립니다...')
 
     def capture_current_state_as_origin(self):
+        # ID별 가속도 설정 (단위: 214.577 rev/min²/unit)
+        ACCEL_PER_ID = {
+            1: 60,  2: 60,   # rot_R1,R2 (15:1) 기존 유지
+            3: 20,  4: 20,   # rot_R3,R4 (5:1)  기존 유지
+            5:  1,  6:  1,   # rot_R5,R6 (1:1)  ← 20→5 대폭 낮춤
+            7: 20,           # gripper_R
+            11: 60, 12: 60,  # rot_L1,L2
+            13: 20, 14: 20,  # rot_L3,L4
+            15:  1, 16:  1,  # rot_L5,L6 ← 20→5 대폭 낮춤
+            17: 20,          # gripper_L
+        }
+
         all_ids = (list(RIGHT_JOINT_NAME_TO_ID.values())
-                   + list(LEFT_JOINT_NAME_TO_ID.values()))
+                + list(LEFT_JOINT_NAME_TO_ID.values()))
         for dxl_id in all_ids:
-            self.packetHandler.write4ByteTxRx(self.portHandler, dxl_id, 108, 20)
+            self.packetHandler.write4ByteTxRx(
+                self.portHandler, dxl_id, 108, ACCEL_PER_ID[dxl_id])
             pos, _, _ = self.packetHandler.read4ByteTxRx(self.portHandler, dxl_id, 132)
             if pos > 2147483647:
                 pos -= 4294967296
@@ -100,9 +118,14 @@ class DualArmActionServer(Node):
         msg.name     = self.right_joints + self.left_joints
         msg.position = self.right_current_angles + self.left_current_angles
         self.joint_pub.publish(msg)
+    
+    def _rad_per_sec_to_dxl_velocity(self, rad_per_sec, gear_ratio):
+        rpm = abs(rad_per_sec) * gear_ratio * (60.0 / (2 * math.pi))
+        dxl_unit = int(rpm / 0.229)
+        return max(1, min(dxl_unit, 1023))
 
     def _execute_arm(self, goal_handle, joint_name_to_id, gear_ratios,
-                     direction_map, target_joints, sync_write, angles_ref_name):
+                 direction_map, target_joints, sync_write, angles_ref_name):
         trajectory  = goal_handle.request.trajectory
         points      = trajectory.points
         joint_names = trajectory.joint_names
@@ -113,9 +136,15 @@ class DualArmActionServer(Node):
 
         start_time       = time.time()
         last_goal_pulses = {}
+        prev_angles      = {name: getattr(self, angles_ref_name)[i]
+                            for i, name in enumerate(target_joints)}
+        prev_t           = 0.0
 
         for point in points:
-            t_target = point.time_from_start.sec + (point.time_from_start.nanosec / 1e9)
+            t_target  = point.time_from_start.sec + (point.time_from_start.nanosec / 1e9)
+            delta_t   = t_target - prev_t  # 이전 포인트와의 시간 간격
+            delta_t   = max(delta_t, 0.001)  # 0나누기 방지
+
             while (time.time() - start_time) < t_target:
                 time.sleep(0.001)
 
@@ -129,14 +158,25 @@ class DualArmActionServer(Node):
                     rad = point.positions[idx]
                 else:
                     rad = current_ref[i]
-                angles.append(rad)
 
-                dxl_id       = joint_name_to_id[name]
+                angles.append(rad)
+                dxl_id = joint_name_to_id[name]
+
+                # 핵심: 구간 거리/시간으로 필요 속도 역산
+                dist_rad  = abs(rad - prev_angles[name])
+                need_vel  = dist_rad / delta_t  # rad/s
+                dxl_vel   = self._rad_per_sec_to_dxl_velocity(need_vel, gear_ratios[dxl_id])
+
+                with self.port_lock:
+                    self.packetHandler.write4ByteTxRx(
+                        self.portHandler, dxl_id, 112, dxl_vel)
+
                 delta_deg    = math.degrees(rad)
                 pulse_change = int(delta_deg * gear_ratios[dxl_id]
-                                   * (4096.0 / 360.0) * direction_map[dxl_id])
+                                * (4096.0 / 360.0) * direction_map[dxl_id])
                 goal         = self.initial_motor_pulses[dxl_id] + pulse_change
                 last_goal_pulses[dxl_id] = goal
+                prev_angles[name]        = rad
 
                 goal_u = goal & 0xFFFFFFFF
                 param  = [
@@ -152,6 +192,7 @@ class DualArmActionServer(Node):
                 sync_write.clearParam()
 
             setattr(self, angles_ref_name, angles)
+            prev_t = t_target
 
         self.get_logger().info('⏳ 마지막 위치 도달 대기 중...')
         timeout_start = time.time()

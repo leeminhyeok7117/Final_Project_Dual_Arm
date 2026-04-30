@@ -12,14 +12,14 @@
         <visual name="base_visual">
             <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/base.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/base.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="base_collision">
             <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/base.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/base.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -32,14 +32,14 @@
         <visual name="link_1_L_visual">
             <origin xyz="-1.0566521524424389e-09 -1.5874687753214545e-09 -0.18219999738539297" rpy="1.570796326794897 6.661338147750935e-16 -1.6653345369377375e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_1_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_1_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_1_L_collision">
             <origin xyz="-1.0566521524424389e-09 -1.5874687753214545e-09 -0.18219999738539297" rpy="1.570796326794897 6.661338147750935e-16 -1.6653345369377375e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_1_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_1_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -52,14 +52,14 @@
         <visual name="link_2_L_visual">
             <origin xyz="1.587468526631497e-09 -0.2599999973853931 0.03962500105665215" rpy="7.273344048804492e-16 1.570796326794896 0" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_2_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_2_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_2_L_collision">
             <origin xyz="1.587468526631497e-09 -0.2599999973853931 0.03962500105665215" rpy="7.273344048804492e-16 1.570796326794896 0" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_2_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_2_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -72,14 +72,14 @@
         <visual name="link_4_L_visual">
             <origin xyz="-1.056651974806755e-09 -0.22000000158746258 -0.22199999738539727" rpy="1.5707963267949228 1.221245327087671e-15 -1.7347234759768244e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_4_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_4_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_4_L_collision">
             <origin xyz="-1.056651974806755e-09 -0.22000000158746258 -0.22199999738539727" rpy="1.5707963267949228 1.221245327087671e-15 -1.7347234759768244e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_4_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_4_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -92,14 +92,14 @@
         <visual name="link_3_L_visual">
             <origin xyz="-1.0566521524424389e-09 0.25999999738539264 -0.16125000158746858" rpy="3.1415926535897922 1.7347234759768147e-16 7.181755190543978e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_3_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_3_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_3_L_collision">
             <origin xyz="-1.0566521524424389e-09 0.25999999738539264 -0.16125000158746858" rpy="3.1415926535897922 1.7347234759768147e-16 7.181755190543978e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_3_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_3_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -112,14 +112,14 @@
         <visual name="link_5_L_visual">
             <origin xyz="-1.056651885988913e-09 0.259999997385398 -0.40125000158746366" rpy="-3.1415926535897674 1.7347234759764842e-16 1.2212453270876708e-15" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_5_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_5_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_5_L_collision">
             <origin xyz="-1.056651885988913e-09 0.259999997385398 -0.40125000158746366" rpy="-3.1415926535897674 1.7347234759764842e-16 1.2212453270876708e-15" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_5_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_5_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -132,14 +132,14 @@
         <visual name="end_point_L_visual">
             <origin xyz="-1.056651850461776e-09 -0.45000000158746767 -0.24099999738538516" rpy="1.5707963267949028 7.164407955784219e-16 -1.7347234759766237e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/end_point_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/end_point_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="end_point_L_collision">
             <origin xyz="-1.056651850461776e-09 -0.45000000158746767 -0.24099999738538516" rpy="1.5707963267949028 7.164407955784219e-16 -1.7347234759766237e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/end_point_L.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/end_point_L.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -152,14 +152,14 @@
         <visual name="link_1_R_visual">
             <origin xyz="-1.0566520902699494e-09 -1.5874687436800983e-09 0.18220000261460736" rpy="-1.570796326794896 6.661338147750944e-16 -1.6653345369377323e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_1_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_1_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_1_R_collision">
             <origin xyz="-1.0566520902699494e-09 -1.5874687436800983e-09 0.18220000261460736" rpy="-1.570796326794896 6.661338147750944e-16 -1.6653345369377323e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_1_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_1_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -172,14 +172,14 @@
         <visual name="link_2_R_visual">
             <origin xyz="1.5874686953853967e-09 -0.26000000261460743 -0.039625001056652" rpy="3.0610639988441686e-16 -1.570796326794896 0" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_2_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_2_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_2_R_collision">
             <origin xyz="1.5874686953853967e-09 -0.26000000261460743 -0.039625001056652" rpy="3.0610639988441686e-16 -1.570796326794896 0" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_2_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_2_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -192,14 +192,14 @@
         <visual name="link_4_R_visual">
             <origin xyz="-1.0566516372989554e-09 0.2200000015874632 -0.22200000261461192" rpy="1.5707963267948735 -7.216449660063483e-16 1.3877787807814326e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_4_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_4_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_4_R_collision">
             <origin xyz="-1.0566516372989554e-09 0.2200000015874632 -0.22200000261461192" rpy="1.5707963267948735 -7.216449660063483e-16 1.3877787807814326e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_4_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_4_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -212,14 +212,14 @@
         <visual name="link_5_R_visual">
             <origin xyz="-1.0566517705257185e-09 -0.26000000261461187 -0.4012500015874649" rpy="-2.4233540144563754e-14 5.551115123127511e-17 7.216449660063498e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_5_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_5_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_5_R_collision">
             <origin xyz="-1.0566517705257185e-09 -0.26000000261461187 -0.4012500015874649" rpy="-2.4233540144563754e-14 5.551115123127511e-17 7.216449660063498e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_5_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_5_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -232,14 +232,14 @@
         <visual name="end_point_R_visual">
             <origin xyz="-1.0566517882892869e-09 0.4500000015874697 -0.24100000261460086" rpy="1.5707963267948915 -5.637851296924638e-16 5.551115123127071e-17" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/end_point_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/end_point_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="end_point_R_collision">
             <origin xyz="-1.0566517882892869e-09 0.4500000015874697 -0.24100000261460086" rpy="1.5707963267948915 -5.637851296924638e-16 5.551115123127071e-17" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/end_point_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/end_point_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -252,14 +252,14 @@
         <visual name="link_3_R_visual">
             <origin xyz="-1.0566520547428126e-09 -0.260000002614607 -0.16125000158746886" rpy="6.849548134635539e-16 1.387778780781439e-16 7.355227538141675e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_3_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_3_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
                         <material name="white"/>
             </visual>
         <collision name="link_3_R_collision">
             <origin xyz="-1.0566520547428126e-09 -0.260000002614607 -0.16125000158746886" rpy="6.849548134635539e-16 1.387778780781439e-16 7.355227538141675e-16" />
             <geometry>
-                <mesh filename="package://final_project_pic/meshes/link_3_R.stl" scale="1.0 1.0 1.0" />
+                <mesh filename="package://final_project_two_arm/meshes/link_3_R.stl" scale="1.0 1.0 1.0" />
             </geometry>
         </collision>
     </link>
@@ -268,83 +268,83 @@
         <parent link="base" />
         <child link="link_1_L" />
         <axis xyz="0.0 0.0 1.0" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.35" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.34" />
     </joint>
     <joint name="rot_L2" type="revolute">
         <origin xyz="0.039624999999999994 2.997602166487923e-17 0.07780000000000005" rpy="1.5707963267948966 -3.8857805861880464e-16 -1.5707963267948966" />
         <parent link="link_1_L" />
         <child link="link_2_L" />
         <axis xyz="0.0 0.0 1.0" />
-        <limit lower="-2.0944" upper="0.3491" effort="10.0" velocity="0.35" />
+        <limit lower="-2.0944" upper="0.3491" effort="10.0" velocity="0.34" />
     </joint>
     <joint name="rot_L3" type="revolute">
         <origin xyz="-0.16125 0.0 0.039624999999999994" rpy="-3.141592653589793 1.5707963267948966 0" />
         <parent link="link_2_L" />
         <child link="link_3_L" />
         <axis xyz="0.0 0.0 1.0" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="1.0" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="1.02" />
     </joint>
     <joint name="rot_L4" type="revolute">
         <origin xyz="0.0 0.03800000000000004 0.058750000000000004" rpy="1.5707963267948974 -0.0 -1.6605463961890884e-31" />
         <parent link="link_3_L" />
         <child link="link_4_L" />
         <axis xyz="0.0 0.0 1.0" />
-        <limit lower="-2.0944" upper="0.1745" effort="10.0" velocity="1.0" />
+        <limit lower="-2.0944" upper="0.1745" effort="10.0" velocity="1.02" />
     </joint>
     <joint name="rot_L5" type="revolute">
         <origin xyz="0.0 0.18125000000000005 0.0379999999999999" rpy="-1.5707963267948974 -2.8037623946618293e-32 2.1789610962922083e-47" />
         <parent link="link_4_L" />
         <child link="link_5_L" />
         <axis xyz="0.0 0.0 1.0" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="3.0" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="5.11" />
     </joint>
     <joint name="rot_L6" type="revolute">
         <origin xyz="0.0 0.01900000000000006 0.04875" rpy="1.5707963267948974 -0.0 1.3481509610798863e-31" />
         <parent link="link_5_L" />
         <child link="end_point_L" />
         <axis xyz="0.0 0.0 1.0" />
-        <limit lower="-1.7453" upper="1.7453" effort="10.0" velocity="3.0" />
+        <limit lower="-1.7453" upper="1.7453" effort="10.0" velocity="5.11" />
     </joint>
     <joint name="rot_R1" type="revolute">
         <origin xyz="1.0566521702060073e-09 -0.0622000026146073 -1.5874687281369759e-09" rpy="-1.5707963267948968 1.6653345369377336e-16 7.21644966006351e-16" />
         <parent link="base" />
         <child link="link_1_R" />
         <axis xyz="0.0 0.0 1.0" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.35" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.34" />
     </joint>
     <joint name="rot_R2" type="revolute">
         <origin xyz="0.039624999999999994 3.053113317719181e-17 -0.07780000000000001" rpy="-1.5707963267948966 3.8857805861880464e-16 -1.5707963267948966" />
         <parent link="link_1_R" />
         <child link="link_2_R" />
         <axis xyz="0.0 0.0 1.0" />
-        <limit lower="-2.0944" upper="0.3491" effort="10.0" velocity="0.35" />
+        <limit lower="-2.0944" upper="0.3491" effort="10.0" velocity="0.34" />
     </joint>
     <joint name="rot_R3" type="revolute">
         <origin xyz="-0.16125 0.0 -0.039624999999999994" rpy="-2.7143969068027984e-64 -1.5707963267948966 0" />
         <parent link="link_2_R" />
         <child link="link_3_R" />
         <axis xyz="0.0 0.0 -1.0" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="1.0" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="1.02" />
     </joint>
     <joint name="rot_R4" type="revolute">
         <origin xyz="0.0 -0.038000000000000006 0.058750000000000004" rpy="-1.5707963267948974 2.465190328815662e-32 9.935591755726858e-32" />
         <parent link="link_3_R" />
         <child link="link_4_R" />
         <axis xyz="0.0 0.0 -1.0" />
-        <limit lower="-2.0944" upper="0.1745" effort="10.0" velocity="1.0" />
+        <limit lower="-2.0944" upper="0.1745" effort="10.0" velocity="1.02" />
     </joint>
     <joint name="rot_R5" type="revolute">
         <origin xyz="0.0 -0.18125 0.03799999999999986" rpy="1.5707963267948974 -8.218831152865144e-32 -2.4651903288156685e-32" />
         <parent link="link_4_R" />
         <child link="link_5_R" />
         <axis xyz="0.0 0.0 -1.0" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="3.0" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="5.11" />
     </joint>
     <joint name="rot_R6" type="revolute">
         <origin xyz="0.0 -0.019000000000000003 0.04875" rpy="-1.5707963267948974 -0.0 -2.344225386936698e-31" />
         <parent link="link_5_R" />
         <child link="end_point_R" />
         <axis xyz="0.0 0.0 -1.0" />
-        <limit lower="-1.7453" upper="1.7453" effort="10.0" velocity="3.0" />
+        <limit lower="-1.7453" upper="1.7453" effort="10.0" velocity="5.11" />
     </joint>
 </robot>
