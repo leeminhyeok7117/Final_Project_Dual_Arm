@@ -10,6 +10,7 @@ import math
 import time
 import threading
 from dynamixel_sdk import *
+from dynamixel_sdk import GroupSyncRead
 import calibrate_origin_keyboard as calib
 import subprocess
 
@@ -48,6 +49,12 @@ class DualArmActionServer(Node):
         self.portHandler   = port_handler
         self.packetHandler = packet_handler
         self.port_lock     = threading.Lock()
+        self.sync_read = GroupSyncRead(self.portHandler, self.packetHandler, 132, 4)
+
+        all_ids = list(RIGHT_JOINT_NAME_TO_ID.values()) + list(LEFT_JOINT_NAME_TO_ID.values())
+        for dxl_id in all_ids:
+            if not self.sync_read.addParam(dxl_id):
+                self.get_logger().error(f'SyncRead addParam 실패: ID {dxl_id}')
 
         # 팔별 독립 SyncWrite 객체 (addParam 버퍼가 분리됨)
         self.right_sync_write = GroupSyncWrite(self.portHandler, self.packetHandler, 116, 4)
@@ -64,25 +71,27 @@ class DualArmActionServer(Node):
 
         self.capture_current_state_as_origin()
 
-        self.joint_pub = self.create_publisher(JointState, '/joint_states', 10)
-        self.right_current_angles = [0.0] * len(self.right_joints)
+        self.joint_pub   = self.create_publisher(JointState, '/joint_states',   10)
+        self.gripper_pub = self.create_publisher(JointState, '/gripper_states', 10)
+        self.right_current_angles = [0.0] * len(self.right_all_joints)
         self.left_current_angles  = [0.0] * len(self.left_joints)
 
-        self.state_timer = self.create_timer(0.05, self.publish_current_state)
+        self.state_timer   = self.create_timer(0.05, self.publish_current_state)
+        self.raw_log_timer = self.create_timer(1.0,  self.log_raw_motor_values)
 
         cb_group = ReentrantCallbackGroup()
 
         self._right_action_server = ActionServer(
             self,
             FollowJointTrajectory,
-            '/right_arm_controller/follow_joint_trajectory',
+            '/right_arm_hw/follow_joint_trajectory',
             self.right_execute_callback,
             callback_group=cb_group
         )
         self._left_action_server = ActionServer(
             self,
             FollowJointTrajectory,
-            '/left_arm_controller/follow_joint_trajectory',
+            '/left_arm_hw/follow_joint_trajectory',
             self.left_execute_callback,
             callback_group=cb_group
         )
@@ -115,10 +124,83 @@ class DualArmActionServer(Node):
     def publish_current_state(self):
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.name     = self.right_joints + self.left_joints
-        msg.position = self.right_current_angles + self.left_current_angles
+
+        all_joints = (
+            [(name, RIGHT_JOINT_NAME_TO_ID[name], RIGHT_GEAR_RATIOS, RIGHT_DIRECTION_MAP)
+            for name in self.right_joints] +
+            [(name, LEFT_JOINT_NAME_TO_ID[name], LEFT_GEAR_RATIOS, LEFT_DIRECTION_MAP)
+            for name in self.left_joints]
+        )
+        gripper_joints = [
+            ('gripper_R', RIGHT_JOINT_NAME_TO_ID['gripper_R'], RIGHT_GEAR_RATIOS, RIGHT_DIRECTION_MAP),
+        ]
+
+        with self.port_lock:
+            result = self.sync_read.txRxPacket()
+
+        if result != COMM_SUCCESS:
+            self.get_logger().warn(f'SyncRead 실패: {self.packetHandler.getTxRxResult(result)}')
+            return
+
+        def _read_rad(name, dxl_id, gear_ratios, direction_map):
+            if not self.sync_read.isAvailable(dxl_id, 132, 4):
+                self.get_logger().warn(f'[{name}] 데이터 없음')
+                return None
+            cur_pos = self.sync_read.getData(dxl_id, 132, 4)
+            if cur_pos > 2147483647:
+                cur_pos -= 4294967296
+            pulse_change = cur_pos - self.initial_motor_pulses[dxl_id]
+            delta_deg    = pulse_change / (
+                gear_ratios[dxl_id] * (4096.0 / 360.0) * direction_map[dxl_id]
+            )
+            return math.radians(delta_deg)
+
+        names, positions = [], []
+        for entry in all_joints:
+            rad = _read_rad(*entry)
+            if rad is not None:
+                names.append(entry[0])
+                positions.append(rad)
+
+        msg.name     = names
+        msg.position = positions
         self.joint_pub.publish(msg)
+
+        g_names, g_positions = [], []
+        for entry in gripper_joints:
+            rad = _read_rad(*entry)
+            if rad is not None:
+                g_names.append(entry[0])
+                g_positions.append(rad)
+
+        if g_names:
+            gmsg = JointState()
+            gmsg.header.stamp = msg.header.stamp
+            gmsg.name         = g_names
+            gmsg.position     = g_positions
+            self.gripper_pub.publish(gmsg)
     
+    def log_raw_motor_values(self):
+        id_to_name = {v: k for k, v in {**RIGHT_JOINT_NAME_TO_ID, **LEFT_JOINT_NAME_TO_ID}.items()}
+        all_ids    = list(RIGHT_JOINT_NAME_TO_ID.values()) + list(LEFT_JOINT_NAME_TO_ID.values())
+
+        with self.port_lock:
+            result = self.sync_read.txRxPacket()
+
+        if result != COMM_SUCCESS:
+            return
+
+        lines = []
+        for dxl_id in all_ids:
+            if not self.sync_read.isAvailable(dxl_id, 132, 4):
+                continue
+            raw = self.sync_read.getData(dxl_id, 132, 4)
+            if raw > 2147483647:
+                raw -= 4294967296
+            lines.append(f'  ID{dxl_id:2d} ({id_to_name[dxl_id]:>12s}): {raw:>10d}')
+
+        self.get_logger().info('📊 모터 raw 위치값:\n' + '\n'.join(lines))
+
     def _rad_per_sec_to_dxl_velocity(self, rad_per_sec, gear_ratio):
         rpm = abs(rad_per_sec) * gear_ratio * (60.0 / (2 * math.pi))
         dxl_unit = int(rpm / 0.229)
@@ -226,7 +308,7 @@ class DualArmActionServer(Node):
         return self._execute_arm(
             goal_handle,
             RIGHT_JOINT_NAME_TO_ID, RIGHT_GEAR_RATIOS, RIGHT_DIRECTION_MAP,
-            self.right_joints, self.right_sync_write, 'right_current_angles'
+            self.right_all_joints, self.right_sync_write, 'right_current_angles'
         )
 
     def left_execute_callback(self, goal_handle):

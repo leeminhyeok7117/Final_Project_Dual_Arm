@@ -4,8 +4,6 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
-import math
-import time
 
 from builtin_interfaces.msg import Duration
 from moveit_msgs.srv import GetPositionIK, GetMotionPlan
@@ -21,111 +19,87 @@ class DualArmActionClient(Node):
 
         cb = ReentrantCallbackGroup()
 
-        self.ik_client   = self.create_client(GetPositionIK,  '/compute_ik',           callback_group=cb)
-        self.plan_client = self.create_client(GetMotionPlan,  '/plan_kinematic_path',   callback_group=cb)
+        self.ik_client   = self.create_client(GetPositionIK, '/compute_ik',          callback_group=cb)
+        self.plan_client = self.create_client(GetMotionPlan, '/plan_kinematic_path',  callback_group=cb)
 
         self._left_action_client = ActionClient(
             self, FollowJointTrajectory,
-            '/left_arm_controller/follow_joint_trajectory',
+            '/left_arm_hw/follow_joint_trajectory',
             callback_group=cb)
         self._right_action_client = ActionClient(
             self, FollowJointTrajectory,
-            '/right_arm_controller/follow_joint_trajectory',
+            '/right_arm_hw/follow_joint_trajectory',
             callback_group=cb)
 
-        # ── 왼팔 타겟 목록 ──────────────────────────────────────────────────
-        # 단일팔에서 사용하던 Cartesian 목표점과 동일 (frame_id='base')
-        self.left_targets = [
-            {'x': 0.228, 'y': -0.104, 'z': 0.536, 'qx': 0.263, 'qy': -0.656, 'qz': -0.263, 'qw': 0.656, 'gripper': -0.5},
-            {'x': 0.228, 'y': -0.067, 'z': 0.611, 'qx': 0.371, 'qy': -0.602, 'qz': -0.371, 'qw': 0.602, 'gripper': 0.01},
-            {'x': 0.228, 'y':  0.003, 'z': 0.621, 'qx': 0.478, 'qy': -0.521, 'qz': -0.478, 'qw': 0.521, 'gripper': 0.01},
-            {'x': 0.228, 'y':  0.178, 'z': 0.608, 'qx': 0.495, 'qy': -0.505, 'qz': -0.495, 'qw': 0.505, 'gripper': 0.01},
-            {'x': 0.228, 'y':  0.178, 'z': 0.608, 'qx': 0.495, 'qy': -0.505, 'qz': -0.495, 'qw': 0.505, 'gripper': -0.35},
-            {'x': 0.228, 'y':  0.281, 'z': 0.614, 'qx': 0.500, 'qy': -0.500, 'qz': -0.500, 'qw': 0.500, 'gripper': -0.35},
-            {'x': 0.228, 'y':  0.001, 'z': 0.426, 'qx': 0.000, 'qy': -0.707, 'qz': -0.000, 'qw': 0.707, 'gripper': 0.01},
-        ]
-
-        # ── 오른팔 타겟 목록 ─────────────────────────────────────────────────
-        # 왼팔과 완전 대칭: y좌표 부호 반전, 쿼터니언 y/z 성분 부호 반전
         self.right_targets = [
-            {'x': 0.228, 'y':  0.104, 'z': 0.536, 'qx': 0.263, 'qy':  0.656, 'qz':  0.263, 'qw': 0.656, 'gripper': -0.5},
-            {'x': 0.228, 'y':  0.067, 'z': 0.611, 'qx': 0.371, 'qy':  0.602, 'qz':  0.371, 'qw': 0.602, 'gripper': 0.01},
-            {'x': 0.228, 'y': -0.003, 'z': 0.621, 'qx': 0.478, 'qy':  0.521, 'qz':  0.478, 'qw': 0.521, 'gripper': 0.01},
-            {'x': 0.228, 'y': -0.178, 'z': 0.608, 'qx': 0.495, 'qy':  0.505, 'qz':  0.495, 'qw': 0.505, 'gripper': 0.01},
-            {'x': 0.228, 'y': -0.178, 'z': 0.608, 'qx': 0.495, 'qy':  0.505, 'qz':  0.495, 'qw': 0.505, 'gripper': -0.35},
-            {'x': 0.228, 'y': -0.281, 'z': 0.614, 'qx': 0.500, 'qy':  0.500, 'qz':  0.500, 'qw': 0.500, 'gripper': -0.35},
-            {'x': 0.228, 'y': -0.001, 'z': 0.426, 'qx': 0.000, 'qy':  0.707, 'qz':  0.000, 'qw': 0.707, 'gripper': 0.01},
+            {'x': -0.013, 'y': -0.307, 'z': -0.230, 'qx': 0.503,  'qy': -0.498, 'qz':  0.496, 'qw':  0.503, 'gripper': 0.0},
+            {'x':  0.222, 'y': -0.236, 'z': -0.170, 'qx': -0.342, 'qy':  0.622, 'qz': -0.617, 'qw': -0.340, 'gripper': 0.0},
+            {'x':  0.335, 'y': -0.119, 'z': -0.033, 'qx':  0.662, 'qy': -0.257, 'qz':  0.259, 'qw':  0.655, 'gripper': 0.0},
+            {'x':  0.335, 'y': -0.119, 'z': -0.033, 'qx':  0.662, 'qy': -0.257, 'qz':  0.259, 'qw':  0.655, 'gripper': -2.562},
+            {'x':  0.335, 'y': -0.119, 'z': -0.033, 'qx':  0.662, 'qy': -0.257, 'qz':  0.259, 'qw':  0.655, 'gripper': -2.562},
         ]
+        # self.left_targets = [
+        #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
+        #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
+        #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
+        # ]
+        self.left_targets =[]
 
         self.left_arm_joints  = ['rot_L1', 'rot_L2', 'rot_L3', 'rot_L4', 'rot_L5', 'rot_L6']
         self.right_arm_joints = ['rot_R1', 'rot_R2', 'rot_R3', 'rot_R4', 'rot_R5', 'rot_R6']
 
-        self.left_target_joints  = self.left_arm_joints  + ['gripper_L']
-        self.right_target_joints = self.right_arm_joints + ['gripper_R']
-
-        # 팔별 궤적 누적 버퍼
-        self.left_traj_points  = []
-        self.right_traj_points = []
-
-        # 팔별 계획 상태
-        self.left_idx   = 0
-        self.right_idx  = 0
-        self.left_offset  = 0.0
-        self.right_offset = 0.0
+        self.left_idx        = 0
+        self.right_idx       = 0
         self.left_prev_state  = None
         self.right_prev_state = None
         self.left_pending     = None
         self.right_pending    = None
 
-        self.left_done  = False
-        self.right_done = False
-
-        self.get_logger().info('⏳ MoveIt 서비스가 켜질 때까지 기다립니다...')
+        self.get_logger().info('⏳ MoveIt 서비스 대기 중...')
         while not self.ik_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().info('MoveIt /compute_ik 대기 중...')
+            self.get_logger().info('/compute_ik 대기 중...')
         while not self.plan_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().info('MoveIt /plan_kinematic_path 대기 중...')
+            self.get_logger().info('/plan_kinematic_path 대기 중...')
         self.get_logger().info('✅ MoveIt 서비스 연결 성공!')
 
+        # 양팔 독립적으로 시작 (각자 result 기다린 후 다음 스텝 진행)
         self.process_next_left()
         self.process_next_right()
 
     # ── IK 요청 ─────────────────────────────────────────────────────────────
-    def _request_ik(self, group_name, pose_data, prev_state, pending_ref, callback):
-        request = GetPositionIK.Request()
-        request.ik_request.group_name = group_name
-        request.ik_request.timeout    = Duration(sec=5, nanosec=0)
-        request.ik_request.constraints = Constraints()
+    def _request_ik(self, group_name, pose_data, prev_state, callback):
+        req = GetPositionIK.Request()
+        req.ik_request.group_name  = group_name
+        req.ik_request.timeout     = Duration(sec=5, nanosec=0)
+        req.ik_request.constraints = Constraints()
 
         if prev_state is None:
-            request.ik_request.robot_state.is_diff = True
+            req.ik_request.robot_state.is_diff = True
         else:
-            request.ik_request.robot_state.joint_state = prev_state
+            req.ik_request.robot_state.joint_state = prev_state
 
         pose = PoseStamped()
-        pose.header.frame_id     = 'base'
-        pose.pose.position.x     = pose_data['x']
-        pose.pose.position.y     = pose_data['y']
-        pose.pose.position.z     = pose_data['z']
-        pose.pose.orientation.x  = pose_data['qx']
-        pose.pose.orientation.y  = pose_data['qy']
-        pose.pose.orientation.z  = pose_data['qz']
-        pose.pose.orientation.w  = pose_data['qw']
-        request.ik_request.pose_stamped = pose
+        pose.header.frame_id    = 'base'
+        pose.pose.position.x    = pose_data['x']
+        pose.pose.position.y    = pose_data['y']
+        pose.pose.position.z    = pose_data['z']
+        pose.pose.orientation.x = pose_data['qx']
+        pose.pose.orientation.y = pose_data['qy']
+        pose.pose.orientation.z = pose_data['qz']
+        pose.pose.orientation.w = pose_data['qw']
+        req.ik_request.pose_stamped = pose
 
-        future = self.ik_client.call_async(request)
-        future.add_done_callback(callback)
+        self.ik_client.call_async(req).add_done_callback(callback)
 
-    # ── 궤적 요청 ────────────────────────────────────────────────────────────
-    def _request_trajectory(self, group_name, arm_joints, target_positions,
-                            prev_state, callback):
+    # ── 궤적 계획 요청 ───────────────────────────────────────────────────────
+    def _request_trajectory(self, group_name, arm_joints, target_positions, prev_state, callback):
         req = GetMotionPlan.Request()
-        req.motion_plan_request.group_name               = group_name
-        req.motion_plan_request.num_planning_attempts    = 10
-        req.motion_plan_request.allowed_planning_time    = 5.0
+        req.motion_plan_request.group_name                      = group_name
+        req.motion_plan_request.num_planning_attempts           = 10
+        req.motion_plan_request.allowed_planning_time           = 5.0
         req.motion_plan_request.max_velocity_scaling_factor     = 1.0
         req.motion_plan_request.max_acceleration_scaling_factor = 1.0
-        req.motion_plan_request.path_constraints = Constraints()
+        req.motion_plan_request.path_constraints                = Constraints()
 
         if prev_state is None:
             req.motion_plan_request.start_state.is_diff = True
@@ -135,179 +109,134 @@ class DualArmActionClient(Node):
         goal_constraint = Constraints()
         for name, pos in zip(arm_joints, target_positions):
             jc = JointConstraint()
-            jc.joint_name     = name
-            jc.position       = pos
+            jc.joint_name      = name
+            jc.position        = pos
             jc.tolerance_above = 0.01
             jc.tolerance_below = 0.01
-            jc.weight         = 1.0
+            jc.weight          = 1.0
             goal_constraint.joint_constraints.append(jc)
         req.motion_plan_request.goal_constraints.append(goal_constraint)
 
-        future = self.plan_client.call_async(req)
-        future.add_done_callback(callback)
+        self.plan_client.call_async(req).add_done_callback(callback)
 
-    # ── 왼팔 계획 루프 ───────────────────────────────────────────────────────
+    # ── 궤적 전송 + result 대기 ──────────────────────────────────────────────
+    def _send_trajectory(self, action_client, plan_response, arm_joints, arm_name, result_callback,
+                         gripper_joint=None, gripper_pos=0.0):
+        jt = plan_response.motion_plan_response.trajectory.joint_trajectory
+        plan_names = list(jt.joint_names)
+
+        all_joints = arm_joints + ([gripper_joint] if gripper_joint else [])
+
+        traj = JointTrajectory()
+        traj.joint_names = all_joints
+
+        for point in jt.points:
+            p = JointTrajectoryPoint()
+            positions = [point.positions[plan_names.index(n)] for n in arm_joints]
+            if gripper_joint:
+                positions.append(gripper_pos)
+            p.positions  = positions
+            p.velocities = [0.0] * len(all_joints)
+            p.time_from_start = point.time_from_start
+            traj.points.append(p)
+
+        goal_msg = FollowJointTrajectory.Goal()
+        goal_msg.trajectory = traj
+
+        def _goal_response(future):
+            gh = future.result()
+            if not gh.accepted:
+                self.get_logger().error(f'❌ [{arm_name}] 목표 거절됨')
+                rclpy.shutdown()
+                return
+            self.get_logger().info(f'✅ [{arm_name}] 목표 수락, 이동 중...')
+            gh.get_result_async().add_done_callback(result_callback)
+
+        action_client.send_goal_async(goal_msg).add_done_callback(_goal_response)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 왼팔: IK → plan → send → result → 다음 스텝
+    # ══════════════════════════════════════════════════════════════════════════
     def process_next_left(self):
         if self.left_idx >= len(self.left_targets):
-            self.left_done = True
-            self.get_logger().info('✅ 왼팔 궤적 계획 완료!')
-            self._try_send_goals()
+            self.get_logger().info('🏁 왼팔 모든 목표 완료!')
             return
-        self.get_logger().info(f'왼팔 계획 중 [{self.left_idx + 1}/{len(self.left_targets)}]')
+        self.get_logger().info(f'[LEFT] 스텝 {self.left_idx + 1}/{len(self.left_targets)} 계획 중...')
         self._request_ik('left_arm', self.left_targets[self.left_idx],
-                         self.left_prev_state, 'left_pending', self.left_ik_callback)
+                         self.left_prev_state, self._left_ik_cb)
 
-    def left_ik_callback(self, future):
-        response = future.result()
-        if response.error_code.val != 1:
-            self.get_logger().error(f'❌ 왼팔 IK 실패 (코드: {response.error_code.val})')
+    def _left_ik_cb(self, future):
+        res = future.result()
+        if res.error_code.val != 1:
+            self.get_logger().error(f'❌ [LEFT] IK 실패 (코드: {res.error_code.val})')
             rclpy.shutdown()
             return
-        self.left_pending = response.solution.joint_state
-        all_names  = list(response.solution.joint_state.name)
-        all_pos    = list(response.solution.joint_state.position)
+        self.left_pending = res.solution.joint_state
+        all_names  = list(res.solution.joint_state.name)
+        all_pos    = list(res.solution.joint_state.position)
         target_pos = [all_pos[all_names.index(n)] for n in self.left_arm_joints]
         self._request_trajectory('left_arm', self.left_arm_joints, target_pos,
-                                 self.left_prev_state, self.left_plan_callback)
+                                 self.left_prev_state, self._left_plan_cb)
 
-    def left_plan_callback(self, future):
-        response = future.result()
-        if response.motion_plan_response.error_code.val != 1:
-            self.get_logger().error('❌ 왼팔 궤적 계획 실패')
+    def _left_plan_cb(self, future):
+        res = future.result()
+        if res.motion_plan_response.error_code.val != 1:
+            self.get_logger().error('❌ [LEFT] 궤적 계획 실패')
             rclpy.shutdown()
             return
-        self._accumulate_trajectory(
-            response, self.left_targets[self.left_idx]['gripper'],
-            self.left_target_joints, self.left_arm_joints,
-            self.left_traj_points, 'left_offset')
+        self.get_logger().info(f'[LEFT] 스텝 {self.left_idx + 1} 전송 중...')
+        self._send_trajectory(self._left_action_client, res,
+                              self.left_arm_joints, 'LEFT', self._left_result_cb)
+
+    def _left_result_cb(self, future):
+        # ★ 여기서 도달 확인 후 다음 스텝 진행
+        self.get_logger().info(f'✅ [LEFT] 스텝 {self.left_idx + 1} 도달 완료!')
         self.left_prev_state = self.left_pending
         self.left_idx += 1
         self.process_next_left()
 
-    # ── 오른팔 계획 루프 ──────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # 오른팔: IK → plan → send → result → 다음 스텝
+    # ══════════════════════════════════════════════════════════════════════════
     def process_next_right(self):
         if self.right_idx >= len(self.right_targets):
-            self.right_done = True
-            self.get_logger().info('✅ 오른팔 궤적 계획 완료!')
-            self._try_send_goals()
+            self.get_logger().info('🏁 오른팔 모든 목표 완료!')
             return
-        self.get_logger().info(f'오른팔 계획 중 [{self.right_idx + 1}/{len(self.right_targets)}]')
+        self.get_logger().info(f'[RIGHT] 스텝 {self.right_idx + 1}/{len(self.right_targets)} 계획 중...')
         self._request_ik('right_arm', self.right_targets[self.right_idx],
-                         self.right_prev_state, 'right_pending', self.right_ik_callback)
+                         self.right_prev_state, self._right_ik_cb)
 
-    def right_ik_callback(self, future):
-        response = future.result()
-        if response.error_code.val != 1:
-            self.get_logger().error(f'❌ 오른팔 IK 실패 (코드: {response.error_code.val})')
+    def _right_ik_cb(self, future):
+        res = future.result()
+        if res.error_code.val != 1:
+            self.get_logger().error(f'❌ [RIGHT] IK 실패 (코드: {res.error_code.val})')
             rclpy.shutdown()
             return
-        self.right_pending = response.solution.joint_state
-        all_names  = list(response.solution.joint_state.name)
-        all_pos    = list(response.solution.joint_state.position)
+        self.right_pending = res.solution.joint_state
+        all_names  = list(res.solution.joint_state.name)
+        all_pos    = list(res.solution.joint_state.position)
         target_pos = [all_pos[all_names.index(n)] for n in self.right_arm_joints]
         self._request_trajectory('right_arm', self.right_arm_joints, target_pos,
-                                 self.right_prev_state, self.right_plan_callback)
+                                 self.right_prev_state, self._right_plan_cb)
 
-    def right_plan_callback(self, future):
-        response = future.result()
-        if response.motion_plan_response.error_code.val != 1:
-            self.get_logger().error('❌ 오른팔 궤적 계획 실패')
+    def _right_plan_cb(self, future):
+        res = future.result()
+        if res.motion_plan_response.error_code.val != 1:
+            self.get_logger().error('❌ [RIGHT] 궤적 계획 실패')
             rclpy.shutdown()
             return
-        self._accumulate_trajectory(
-            response, self.right_targets[self.right_idx]['gripper'],
-            self.right_target_joints, self.right_arm_joints,
-            self.right_traj_points, 'right_offset')
+        self.get_logger().info(f'[RIGHT] 스텝 {self.right_idx + 1} 전송 중...')
+        target = self.right_targets[self.right_idx]
+        self._send_trajectory(self._right_action_client, res,
+                              self.right_arm_joints, 'RIGHT', self._right_result_cb,
+                              gripper_joint='gripper_R', gripper_pos=target['gripper'])
+
+    def _right_result_cb(self, future):
+        # ★ 여기서 도달 확인 후 다음 스텝 진행
+        self.get_logger().info(f'✅ [RIGHT] 스텝 {self.right_idx + 1} 도달 완료!')
         self.right_prev_state = self.right_pending
         self.right_idx += 1
         self.process_next_right()
-
-    # ── 공통 궤적 누적 ───────────────────────────────────────────────────────
-    def _accumulate_trajectory(self, response, gripper_val,
-                               target_joints, arm_joints,
-                               traj_points, offset_attr):
-        plan_joint_names = response.motion_plan_response.trajectory.joint_trajectory.joint_names
-        trajectory_pts   = response.motion_plan_response.trajectory.joint_trajectory.points
-        offset           = getattr(self, offset_attr)
-        last_t           = 0.0
-
-        for point in trajectory_pts:
-            t = point.time_from_start.sec + (point.time_from_start.nanosec / 1e9)
-            last_t   = t
-            abs_time = offset + t
-
-            ordered = []
-            for name in target_joints:
-                if name in plan_joint_names:
-                    idx = list(plan_joint_names).index(name)
-                    ordered.append(point.positions[idx])
-                else:
-                    ordered.append(gripper_val)
-            traj_points.append((abs_time, ordered))
-
-        setattr(self, offset_attr, offset + last_t + 0.5)
-
-    # ── 양팔 동시 목표 전송 ──────────────────────────────────────────────────
-    def _try_send_goals(self):
-        if not (self.left_done and self.right_done):
-            return
-        self.get_logger().info('🚀 양팔 액션 서버로 동시에 궤적을 전송합니다!')
-        self._send_arm_goal(self._left_action_client,
-                            self.left_traj_points,
-                            self.left_target_joints,
-                            'left')
-        self._send_arm_goal(self._right_action_client,
-                            self.right_traj_points,
-                            self.right_target_joints,
-                            'right')
-
-    def _send_arm_goal(self, action_client, traj_points, target_joints, arm_name):
-        if not action_client.wait_for_server(timeout_sec=3.0):
-            self.get_logger().error(f'❌ {arm_name} 액션 서버를 찾을 수 없습니다.')
-            rclpy.shutdown()
-            return
-
-        goal_msg = FollowJointTrajectory.Goal()
-        traj     = JointTrajectory()
-        traj.joint_names = target_joints
-
-        for t_target, angles in traj_points:
-            point = JointTrajectoryPoint()
-            point.positions = angles
-            sec     = int(t_target)
-            nanosec = int((t_target - sec) * 1e9)
-            point.time_from_start = Duration(sec=sec, nanosec=nanosec)
-            traj.points.append(point)
-
-        goal_msg.trajectory = traj
-        send_future = action_client.send_goal_async(goal_msg)
-
-        if arm_name == 'left':
-            send_future.add_done_callback(self.left_goal_response_callback)
-        else:
-            send_future.add_done_callback(self.right_goal_response_callback)
-
-    def left_goal_response_callback(self, future):
-        gh = future.result()
-        if not gh.accepted:
-            self.get_logger().error('❌ 왼팔 액션 서버가 명령을 거절했습니다.')
-            return
-        self.get_logger().info('✅ 왼팔 명령 수락! 이동 중...')
-        gh.get_result_async().add_done_callback(self.left_result_callback)
-
-    def left_result_callback(self, future):
-        self.get_logger().info('🏁 왼팔 동작 완료!')
-
-    def right_goal_response_callback(self, future):
-        gh = future.result()
-        if not gh.accepted:
-            self.get_logger().error('❌ 오른팔 액션 서버가 명령을 거절했습니다.')
-            return
-        self.get_logger().info('✅ 오른팔 명령 수락! 이동 중...')
-        gh.get_result_async().add_done_callback(self.right_result_callback)
-
-    def right_result_callback(self, future):
-        self.get_logger().info('🏁 오른팔 동작 완료!')
 
 
 def main(args=None):

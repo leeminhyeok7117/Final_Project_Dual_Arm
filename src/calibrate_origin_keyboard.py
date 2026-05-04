@@ -21,13 +21,49 @@ TORQUE_DISABLE   = 0
 OP_MODE_POSITION     = 3
 OP_MODE_EXT_POSITION = 4
 
+TICKS_PER_REV = 4096
+
+# ─────────────────────────────────────────────────────────────
+# 모터별 원점 위치 (엔코더 절대값)
+#
+# [기어 모터] reboot 후 멀티턴 리셋되므로 한 바퀴 내 위치로 mod 처리
+#   Motor 1: 실측 원점 raw = -9900  →  -9900 % 4096 = 2388
+#   Motor 2: 기본 원점 2048 (실측값 없음, 필요시 교체)
+#   Motor 3: 기본 원점 2048
+#   Motor 4: 실측 원점 raw = -2503  →  -2503 % 4096 = 1593
+#   Motor 11~14: 왼팔, 기본 2048 (필요시 교체)
+#
+# [일반 모터]
+#   Motor 6: 2048 기준 +80° → 2048 + round(80 * 4096 / 360) = 2958
+#            방향이 반대라면 2048 - 910 = 1138 로 수정
+#   나머지 일반 모터: 기본 2048
+# ─────────────────────────────────────────────────────────────
+MOTOR_HOME = {
+    # 오른팔 기어 모터
+    1:  (-9900) % TICKS_PER_REV,
+    2:  2048,
+    3:  2048,
+    4:  (-2503) % TICKS_PER_REV,
+    # 오른팔 일반 모터
+    5:  2048,
+    6:  2048 + round(80 * (2048*2/360)),
+    7:  2048,
+    # 왼팔 기어 모터 (부호 반전)
+    11: (9900) % TICKS_PER_REV,                   # 2308
+    12: 2048,
+    13: 2048,
+    14: (2503) % TICKS_PER_REV,                    # 3200
+    # 왼팔 일반 모터 (방향 반전)
+    15: 2048,
+    16: 2048 - round(80 * (2048*2/360)),           # 1138
+    17: 2048,
+}
+
 # 오른팔 (Right): 모터 ID 1-7
-# rot_R1→1, rot_R2→2, rot_R3→3, rot_R4→4, rot_R5→5, rot_R6→6, gripper_R→7
 RIGHT_GEARED = [1, 2, 3, 4]
 RIGHT_NORMAL = [5, 6, 7]
 
 # 왼팔 (Left): 모터 ID 11-17
-# rot_L1→11, rot_L2→12, rot_L3→13, rot_L4→14, rot_L5→15, rot_L6→16, gripper_L→17
 LEFT_GEARED  = [11, 12, 13, 14]
 LEFT_NORMAL  = [15, 16, 17]
 
@@ -80,14 +116,19 @@ def jog_motor(dxl_id, direction):
 
 
 def reboot_and_home_geared(dxl_id):
+    """
+    기어 모터 reboot → EXT_POSITION 재설정 → 모터별 원점으로 이동
+    reboot 시 멀티턴 카운터가 리셋되므로 MOTOR_HOME은 0~4095 범위 값이어야 함
+    """
+    home = MOTOR_HOME.get(dxl_id, 2048)
     print(f"\n\n[{dxl_id}번 모터] 재부팅 및 멀티턴 초기화를 진행합니다...")
     packetHandler.reboot(portHandler, dxl_id)
     time.sleep(1.0)
     packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
     packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_OPERATING_MODE, OP_MODE_EXT_POSITION)
     packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
-    print(f"[{dxl_id}번 모터] 절대 위치 2048로 정렬합니다.")
-    packetHandler.write4ByteTxRx(portHandler, dxl_id, ADDR_GOAL_POSITION, 2048)
+    print(f"[{dxl_id}번 모터] 원점 위치 {home} (ticks) 으로 이동합니다.")
+    packetHandler.write4ByteTxRx(portHandler, dxl_id, ADDR_GOAL_POSITION, home)
     time.sleep(0.5)
 
 
@@ -95,17 +136,27 @@ def home_normal_motors(arm):
     motors = RIGHT_NORMAL if arm == 'right' else LEFT_NORMAL
     print(f"\n\n--- {'오른팔' if arm == 'right' else '왼팔'} 일반 모터({motors}) 원점 복귀 ---")
     for dxl_id in motors:
+        home = MOTOR_HOME.get(dxl_id, 2048)
         packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
         packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_OPERATING_MODE, OP_MODE_POSITION)
         packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
         packetHandler.write4ByteTxRx(portHandler, dxl_id, ADDR_PROFILE_VELOCITY, 20)
-        packetHandler.write4ByteTxRx(portHandler, dxl_id, ADDR_GOAL_POSITION, 2048)
+        packetHandler.write4ByteTxRx(portHandler, dxl_id, ADDR_GOAL_POSITION, home)
         packetHandler.write4ByteTxRx(portHandler, dxl_id, ADDR_PROFILE_VELOCITY, 0)
-        print(f"[{dxl_id}번 모터] 2048로 이동 명령 전송 완료.")
+        print(f"[{dxl_id}번 모터] 원점 {home} (ticks) 으로 이동 명령 전송 완료.")
 
 
 def calibrate_origin():
     setup()
+
+    # 시작 시 MOTOR_HOME 테이블 출력
+    print("\n=== 모터별 원점 위치 테이블 ===")
+    print(f"  {'ID':>4} | {'원점(ticks)':>11} | {'원점(°, 2048기준)':>18}")
+    print(f"  {'─'*4}-+-{'─'*11}-+-{'─'*18}")
+    for mid, home in sorted(MOTOR_HOME.items()):
+        deg = (home - 2048) * 360.0 / TICKS_PER_REV
+        print(f"  {mid:>4} | {home:>11} | {deg:>+17.2f}°")
+    print()
 
     print("\n=======================================================")
     print("      양팔 키보드 수동 원점 정렬 (Dual-Arm Homing)      ")
@@ -116,7 +167,7 @@ def calibrate_origin():
     print("    오른팔: 1→모터1  2→모터2  3→모터3  4→모터4")
     print("    왼 팔: 1→모터11 2→모터12 3→모터13 4→모터14")
     print(" [ a ] / [ d ] : 선택한 모터 시계 반대 / 시계 방향으로 회전")
-    print(" [ r ] : 선택한 모터 멀티턴 초기화(Reboot) 및 2048로 정렬")
+    print(" [ r ] : 선택한 모터 멀티턴 초기화(Reboot) → 모터별 원점으로 이동")
     print(" [ h ] : 현재 팔의 일반 모터 원점 복귀")
     print("    오른팔: 모터 5, 6, 7  /  왼팔: 모터 15, 16, 17")
     print(" [ q ] : 프로그램 종료")
@@ -135,7 +186,7 @@ def calibrate_origin():
             if key == 'q':
                 print("\n프로그램을 종료합니다.")
                 break
-            elif key in ['R', 'r'] and key == 'R':
+            elif key == 'R':
                 arm_mode       = 'right'
                 selected_motor = 1
                 print(f"\n-> 오른팔 모드 선택됨 (모터 1-7). 선택된 모터: 1번")
