@@ -12,6 +12,7 @@ import threading
 from dynamixel_sdk import *
 from dynamixel_sdk import GroupSyncRead
 import calibrate_origin_keyboard as calib
+from return_to_origin import return_to_origin
 import subprocess
 
 # ── 오른팔: 모터 ID 1-7 ──────────────────────────────────────────────────────
@@ -77,7 +78,7 @@ class DualArmActionServer(Node):
         self.left_current_angles  = [0.0] * len(self.left_joints)
 
         self.state_timer   = self.create_timer(0.05, self.publish_current_state)
-        self.raw_log_timer = self.create_timer(1.0,  self.log_raw_motor_values)
+        # self.raw_log_timer = self.create_timer(1.0,  self.log_raw_motor_values)
 
         cb_group = ReentrantCallbackGroup()
 
@@ -333,6 +334,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        return_to_origin(port_h, packet_h, node.initial_motor_pulses)
         if port_h.is_open:
             port_h.closePort()
         print("\n[액션 서버] 종료되었습니다.")

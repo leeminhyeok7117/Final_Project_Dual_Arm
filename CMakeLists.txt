@@ -26,6 +26,7 @@ install(PROGRAMS
   src/action.py
   src/client.py
   src/teleoperate.py
+  src/return_to_origin.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
