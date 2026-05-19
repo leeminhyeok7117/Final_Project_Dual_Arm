@@ -13,30 +13,31 @@ from dynamixel_sdk import *
 from dynamixel_sdk import GroupSyncRead
 import calibrate_origin_keyboard as calib
 from return_to_origin import return_to_origin
+import gripper_guard
 import subprocess
 
 # ── 오른팔: 모터 ID 1-7 ──────────────────────────────────────────────────────
 # rot_R1→1, rot_R2→2, rot_R3→3, rot_R4→4, rot_R5→5, rot_R6→6, gripper_R→7
 # 단일팔(second_config) 동작 검증 완료 → 모터 배치 동일
 RIGHT_JOINT_NAME_TO_ID = {
-    'rot_R1': 1, 'rot_R2': 2, 'rot_R3': 3,
-    'rot_R4': 4, 'rot_R5': 5, 'rot_R6': 6,
-    'gripper_R': 7
+    'R_1': 1, 'R_2': 2, 'R_3': 3,
+    'R_4': 4, 'R_5': 5, 'R_6': 6, 'R_7': 7,
+    'gripper_R': 8
 }
-RIGHT_GEAR_RATIOS   = {1: 15, 2: 15, 3: 5, 4: 5, 5: 1, 6: 1, 7: 1}
+RIGHT_GEAR_RATIOS   = {1: 15, 2: 15, 3: 5, 4: 5, 5: 1, 6: 1, 7: 1, 8: 1}
 # URDF rot_R3/R4/R5/R6 axis=-Z (대칭 반전) → 단일팔 대비 방향 반전 적용
-RIGHT_DIRECTION_MAP = {1: 1, 2: 1, 3: 1, 4: 1, 5: -1, 6: 1, 7: 1}
+RIGHT_DIRECTION_MAP = {1: 1, 2: 1, 3: 1, 4: 1, 5: -1, 6: 1, 7: 1, 8: 1}
 
-# ── 왼팔: 모터 ID 11-17 ──────────────────────────────────────────────────────
-# rot_L1→11, rot_L2→12, rot_L3→13, rot_L4→14, rot_L5→15, rot_L6→16, gripper_L→17
+# ── 왼팔: 모터 ID 11-18 ──────────────────────────────────────────────────────
+# rot_L1→11, rot_L2→12, rot_L3→13, rot_L4→14, rot_L5→15, rot_L6→16, rot_L7→17, gripper_L→18
 LEFT_JOINT_NAME_TO_ID = {
-    'rot_L1': 11, 'rot_L2': 12, 'rot_L3': 13,
-    'rot_L4': 14, 'rot_L5': 15, 'rot_L6': 16,
-    'gripper_L': 17
+    'L_1': 11, 'L_2': 12, 'L_3': 13,
+    'L_4': 14, 'L_5': 15, 'L_6': 16, 'L_7': 17,
+    'gripper_L': 18
 }
-LEFT_GEAR_RATIOS   = {11: 15, 12: 15, 13: 5, 14: 5, 15: 1, 16: 1, 17: 1}
+LEFT_GEAR_RATIOS   = {11: 15, 12: 15, 13: 5, 14: 5, 15: 1, 16: 1, 17: 1, 18: 1}
 # URDF rot_L3/L4/L5/L6 axis=+Z → 단일팔과 동일 방향
-LEFT_DIRECTION_MAP = {11: -1, 12: -1, 13: -1, 14: -1, 15: 1, 16: -1, 17: 1}
+LEFT_DIRECTION_MAP = {11: -1, 12: -1, 13: -1, 14: -1, 15: 1, 16: -1, 17: 1, 18: 1}
 
 
 class DualArmActionServer(Node):
@@ -50,7 +51,8 @@ class DualArmActionServer(Node):
         self.portHandler   = port_handler
         self.packetHandler = packet_handler
         self.port_lock     = threading.Lock()
-        self.sync_read = GroupSyncRead(self.portHandler, self.packetHandler, 132, 4)
+        # 126(Present Load, 2B) ~ 135(Present Position 끝, 132+4-1) 한 번에 읽기
+        self.sync_read = GroupSyncRead(self.portHandler, self.packetHandler, 126, 10)
 
         all_ids = list(RIGHT_JOINT_NAME_TO_ID.values()) + list(LEFT_JOINT_NAME_TO_ID.values())
         for dxl_id in all_ids:
@@ -77,8 +79,9 @@ class DualArmActionServer(Node):
         self.right_current_angles = [0.0] * len(self.right_all_joints)
         self.left_current_angles  = [0.0] * len(self.left_joints)
 
-        self.state_timer   = self.create_timer(0.05, self.publish_current_state)
-        # self.raw_log_timer = self.create_timer(1.0,  self.log_raw_motor_values)
+        # self.state_timer      = self.create_timer(0.05, self.publish_current_state)
+        self.raw_log_timer    = self.create_timer(1.0,  self.log_raw_motor_values)
+        self.gripper_chk_timer = self.create_timer(0.05, self._gripper_guard_check)
 
         cb_group = ReentrantCallbackGroup()
 
@@ -96,19 +99,20 @@ class DualArmActionServer(Node):
             self.left_execute_callback,
             callback_group=cb_group
         )
+        gripper_guard.configure(dxl_id_=RIGHT_JOINT_NAME_TO_ID['gripper_R'], threshold_percent=80)
         self.get_logger().info('🤖 양팔 다이나믹셀 액션 서버 가동 완료! 명령을 기다립니다...')
 
     def capture_current_state_as_origin(self):
         # ID별 가속도 설정 (단위: 214.577 rev/min²/unit)
         ACCEL_PER_ID = {
-            1: 60,  2: 60,   # rot_R1,R2 (15:1) 기존 유지
-            3: 20,  4: 20,   # rot_R3,R4 (5:1)  기존 유지
-            5:  1,  6:  1,   # rot_R5,R6 (1:1)  ← 20→5 대폭 낮춤
-            7: 20,           # gripper_R
+            1: 60,  2: 60,   # rot_R1,R2 (15:1)
+            3: 20,  4: 20,   # rot_R3,R4 (5:1)
+            5:  1,  6:  1,   # rot_R5,R6 (1:1)
+            7: 20,  8: 20,   # rot_R7, gripper_R
             11: 60, 12: 60,  # rot_L1,L2
             13: 20, 14: 20,  # rot_L3,L4
-            15:  1, 16:  1,  # rot_L5,L6 ← 20→5 대폭 낮춤
-            17: 20,          # gripper_L
+            15:  1, 16:  1,  # rot_L5,L6
+            17: 20, 18: 20,  # rot_L7, gripper_L
         }
 
         all_ids = (list(RIGHT_JOINT_NAME_TO_ID.values())
@@ -180,7 +184,31 @@ class DualArmActionServer(Node):
             gmsg.name         = g_names
             gmsg.position     = g_positions
             self.gripper_pub.publish(gmsg)
+
     
+    def _gripper_guard_check(self):
+        gripper_id = RIGHT_JOINT_NAME_TO_ID['gripper_R']
+        with self.port_lock:
+            load_raw, result, _ = self.packetHandler.read2ByteTxRx(
+                self.portHandler, gripper_id, 126)
+        if result != COMM_SUCCESS:
+            return
+        if load_raw > 32767:
+            load_raw -= 65536
+        load_pct = load_raw / 10.0
+        if gripper_guard.check(load_pct):
+            with self.port_lock:
+                cur_pos, result, _ = self.packetHandler.read4ByteTxRx(
+                    self.portHandler, gripper_id, 132)
+            if result != COMM_SUCCESS:
+                return
+            if cur_pos > 2147483647:
+                cur_pos -= 4294967296
+            goal_u = cur_pos & 0xFFFFFFFF
+            with self.port_lock:
+                self.packetHandler.write4ByteTxRx(
+                    self.portHandler, gripper_id, 116, goal_u)
+
     def log_raw_motor_values(self):
         id_to_name = {v: k for k, v in {**RIGHT_JOINT_NAME_TO_ID, **LEFT_JOINT_NAME_TO_ID}.items()}
         all_ids    = list(RIGHT_JOINT_NAME_TO_ID.values()) + list(LEFT_JOINT_NAME_TO_ID.values())
@@ -200,7 +228,7 @@ class DualArmActionServer(Node):
                 raw -= 4294967296
             lines.append(f'  ID{dxl_id:2d} ({id_to_name[dxl_id]:>12s}): {raw:>10d}')
 
-        self.get_logger().info('📊 모터 raw 위치값:\n' + '\n'.join(lines))
+        # self.get_logger().info('📊 모터 raw 위치값:\n' + '\n'.join(lines))
 
     def _rad_per_sec_to_dxl_velocity(self, rad_per_sec, gear_ratio):
         rpm = abs(rad_per_sec) * gear_ratio * (60.0 / (2 * math.pi))
@@ -245,14 +273,14 @@ class DualArmActionServer(Node):
                 angles.append(rad)
                 dxl_id = joint_name_to_id[name]
 
-                # 핵심: 구간 거리/시간으로 필요 속도 역산
-                dist_rad  = abs(rad - prev_angles[name])
-                need_vel  = dist_rad / delta_t  # rad/s
-                dxl_vel   = self._rad_per_sec_to_dxl_velocity(need_vel, gear_ratios[dxl_id])
-
-                with self.port_lock:
-                    self.packetHandler.write4ByteTxRx(
-                        self.portHandler, dxl_id, 112, dxl_vel)
+                # 구간 거리가 있을 때만 속도 갱신 (0이면 덮어쓰지 않음)
+                dist_rad = abs(rad - prev_angles[name])
+                if dist_rad > 1e-4:
+                    need_vel = dist_rad / delta_t
+                    dxl_vel  = self._rad_per_sec_to_dxl_velocity(need_vel, gear_ratios[dxl_id])
+                    with self.port_lock:
+                        self.packetHandler.write4ByteTxRx(
+                            self.portHandler, dxl_id, 112, dxl_vel)
 
                 delta_deg    = math.degrees(rad)
                 pulse_change = int(delta_deg * gear_ratios[dxl_id]
@@ -334,9 +362,9 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        return_to_origin(port_h, packet_h, node.initial_motor_pulses)
         if port_h.is_open:
             port_h.closePort()
+        return_to_origin()
         print("\n[액션 서버] 종료되었습니다.")
 
 

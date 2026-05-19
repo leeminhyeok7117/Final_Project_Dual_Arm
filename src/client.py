@@ -30,14 +30,32 @@ class DualArmActionClient(Node):
             self, FollowJointTrajectory,
             '/right_arm_hw/follow_joint_trajectory',
             callback_group=cb)
-
+        
         self.right_targets = [
-            {'x': -0.013, 'y': -0.307, 'z': -0.230, 'qx': 0.503,  'qy': -0.498, 'qz':  0.496, 'qw':  0.503, 'gripper': 0.0},
-            {'x':  0.222, 'y': -0.236, 'z': -0.170, 'qx': -0.342, 'qy':  0.622, 'qz': -0.617, 'qw': -0.340, 'gripper': 0.0},
-            {'x':  0.335, 'y': -0.119, 'z': -0.033, 'qx':  0.662, 'qy': -0.257, 'qz':  0.259, 'qw':  0.655, 'gripper': 0.0},
-            {'x':  0.335, 'y': -0.119, 'z': -0.033, 'qx':  0.662, 'qy': -0.257, 'qz':  0.259, 'qw':  0.655, 'gripper': -2.562},
-            {'x':  0.335, 'y': -0.119, 'z': -0.033, 'qx':  0.662, 'qy': -0.257, 'qz':  0.259, 'qw':  0.655, 'gripper': -2.562},
+            {'x': 0.352, 'y': -0.122, 'z': 0.259, 'qx': 0.707, 'qy': 0.000, 'qz': 0.707, 'qw': 0.000, 'gripper': 2.764},
+            {'x': 0.352, 'y': -0.122, 'z': 0.259, 'qx': 0.707, 'qy': 0.000, 'qz': 0.707, 'qw': 0.000, 'gripper': 0.500},
         ]
+
+        # self.right_targets = [
+            # 1. 초기 위치 (그리퍼 0 또는 이전 상태 유지)
+            # {'x': 0.322, 'y': -0.121, 'z': 0.124, 'qx': 0.707, 'qy': 0.000, 'qz': 0.000, 'qw': 0.707, 'gripper': 0.0},
+
+            # # 2. 이동 위치 1
+            # {'x': 0.335, 'y': -0.121, 'z': -0.083, 'qx': 0.670, 'qy': 0.227, 'qz': -0.227, 'qw': 0.670, 'gripper': 0.0},
+            # {'x': 0.335, 'y': -0.121, 'z': -0.083, 'qx': 0.670, 'qy': 0.227, 'qz': -0.227, 'qw': 0.670, 'gripper': 2.764},
+
+            # # 3. 이동 위치 2
+            # {'x': 0.345, 'y': -0.121, 'z': -0.155, 'qx': 0.643, 'qy': 0.294, 'qz': -0.294, 'qw': 0.643, 'gripper': 2.764},
+            # {'x': 0.345, 'y': -0.121, 'z': -0.155, 'qx': 0.643, 'qy': 0.294, 'qz': -0.294, 'qw': 0.643, 'gripper': 0.2},
+
+            # # 4. 이동 위치 3
+            # {'x': 0.335, 'y': -0.090, 'z': 0.063, 'qx': 0.721, 'qy': 0.337, 'qz': 0.058, 'qw': 0.602, 'gripper': 0.2},
+
+            # # 5. 이동 위치 4
+            # {'x': 0.370, 'y': 0.048, 'z': -0.057, 'qx': 0.575, 'qy': 0.546, 'qz': -0.139, 'qw': 0.593, 'gripper': 0.2},
+            # {'x': 0.370, 'y': 0.048, 'z': -0.057, 'qx': 0.575, 'qy': 0.546, 'qz': -0.139, 'qw': 0.593, 'gripper': 2.764},
+            # {'x': 0.370, 'y': 0.048, 'z': -0.057, 'qx': 0.575, 'qy': 0.546, 'qz': -0.139, 'qw': 0.593, 'gripper': 0.0},
+        # ]
         # self.left_targets = [
         #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
         #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
@@ -45,8 +63,8 @@ class DualArmActionClient(Node):
         # ]
         self.left_targets =[]
 
-        self.left_arm_joints  = ['rot_L1', 'rot_L2', 'rot_L3', 'rot_L4', 'rot_L5', 'rot_L6']
-        self.right_arm_joints = ['rot_R1', 'rot_R2', 'rot_R3', 'rot_R4', 'rot_R5', 'rot_R6']
+        self.left_arm_joints  = ['L_1', 'L_2', 'L_3', 'L_4', 'L_5', 'L_6', 'L_7']
+        self.right_arm_joints = ['R_1', 'R_2', 'R_3', 'R_4', 'R_5', 'R_6', 'R_7']
 
         self.left_idx        = 0
         self.right_idx       = 0
@@ -95,11 +113,13 @@ class DualArmActionClient(Node):
     def _request_trajectory(self, group_name, arm_joints, target_positions, prev_state, callback):
         req = GetMotionPlan.Request()
         req.motion_plan_request.group_name                      = group_name
+        req.motion_plan_request.planner_id = "RRTConnect"
         req.motion_plan_request.num_planning_attempts           = 10
         req.motion_plan_request.allowed_planning_time           = 5.0
         req.motion_plan_request.max_velocity_scaling_factor     = 1.0
         req.motion_plan_request.max_acceleration_scaling_factor = 1.0
         req.motion_plan_request.path_constraints                = Constraints()
+        
 
         if prev_state is None:
             req.motion_plan_request.start_state.is_diff = True

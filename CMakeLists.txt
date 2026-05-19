@@ -27,6 +27,7 @@ install(PROGRAMS
   src/client.py
   src/teleoperate.py
   src/return_to_origin.py
+  src/gripper_guard.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

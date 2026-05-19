@@ -5,6 +5,7 @@ from std_msgs.msg import Float64MultiArray
 from dynamixel_sdk import *
 import math
 import time
+import gripper_guard
 
 import calibrate_origin_keyboard as calib
 
@@ -13,11 +14,11 @@ LEADER_PORT   = '/dev/ttyUSB1'   # 리더  (21~27)
 FOLLOWER_PORT = '/dev/ttyUSB0'   # 팔로워 (1~7)
 BAUDRATE      = 1000000
 
-LEADER_IDS   = [21, 22, 23, 24, 25, 26, 27]
-FOLLOWER_IDS = [1,  2,  3,  4,  5,  6,  7]
+LEADER_IDS   = [11, 12, 13, 14, 15, 16, 17, 18]
+FOLLOWER_IDS = [1,  2,  3,  4,  5,  6,  7, 8]
 
-GEAR_RATIOS   = {1: 15, 2: 15, 3: 5, 4: 5, 5: 1, 6: 1, 7: 1}
-DIRECTION_MAP = {1: -1, 2: -1, 3: -1, 4: -1, 5: 1, 6: 1, 7: -1}
+GEAR_RATIOS   = {1: 15, 2: 15, 3: 9, 4: 5, 5: 1, 6: 1, 7: 1, 8: 1}
+DIRECTION_MAP = {1: -1, 2: -1, 3: -1, 4: -1, 5: 1, 6: 1, 7: -1, 8: 1}
 
 PROFILE_ACCEL = 20
 PROFILE_VEL   = 0
@@ -60,6 +61,8 @@ class TeleopNode(Node):
 
         self.initialize_robots()
         self.timer = self.create_timer(0.05, self.publish_leader_angles)
+        gripper_guard.register(self.follower_ph, self.packetHandler)
+        gripper_guard.start(dxl_id=7, threshold_percent=80)
 
         self.get_logger().info('✅ Teleop 준비 완료! Leader(21~27)를 움직여보세요.')
 
