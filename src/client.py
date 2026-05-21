@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
+import math
 import rclpy
+
+def deg(*args):
+    return [math.radians(a) for a in args]
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.executors import MultiThreadedExecutor
@@ -31,9 +35,28 @@ class DualArmActionClient(Node):
             '/right_arm_hw/follow_joint_trajectory',
             callback_group=cb)
         
-        self.right_targets = [
-            {'x': 0.352, 'y': -0.122, 'z': 0.259, 'qx': 0.707, 'qy': 0.000, 'qz': 0.707, 'qw': 0.000, 'gripper': 2.764},
-            {'x': 0.352, 'y': -0.122, 'z': 0.259, 'qx': 0.707, 'qy': 0.000, 'qz': 0.707, 'qw': 0.000, 'gripper': 0.500},
+        # L_4(인덱스3) 기어비 5:1→9:1 보정: 기존값 × 5/9 (반올림)
+        self.left_targets = [
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048},
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 1},
+
+            {'joints': deg(120, -54, 92,  -1, 72, 52, -8), 'gripper': 1},
+
+            {'joints': deg(108, -32, 52,  -8, 32, 47, 10), 'gripper': 1},
+
+            {'joints': deg(98, -30, 48,   -7, 20, 45, 14), 'gripper': 1},
+            {'joints': deg(98, -30, 48,   -7, 20, 45, 14), 'gripper': 400},
+
+            {'joints': deg(90, -43, 57,  -11, 48, 46, -19), 'gripper': 400},
+            {'joints': deg(-18, -17, -76, -10, 85, 7, -20), 'gripper': 400},
+
+            {'joints': deg(38, -3, -58,    9, 14, 36, 9), 'gripper': 400},
+            {'joints': deg(38, -3, -58,    9, 14, 36, 9), 'gripper': 1},
+
+            {'joints': deg(-18, -17, -76, -10, 85, 7, -20), 'gripper': 1},
+
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 1},
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048},
         ]
 
         # self.right_targets = [
@@ -61,7 +84,7 @@ class DualArmActionClient(Node):
         #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
         #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
         # ]
-        self.left_targets =[]
+        self.right_targets =[]
 
         self.left_arm_joints  = ['L_1', 'L_2', 'L_3', 'L_4', 'L_5', 'L_6', 'L_7']
         self.right_arm_joints = ['R_1', 'R_2', 'R_3', 'R_4', 'R_5', 'R_6', 'R_7']
@@ -72,6 +95,9 @@ class DualArmActionClient(Node):
         self.right_prev_state = None
         self.left_pending     = None
         self.right_pending    = None
+        self.left_retry       = 0
+        self.right_retry      = 0
+        self.MAX_RETRY        = 5
 
         self.get_logger().info('⏳ MoveIt 서비스 대기 중...')
         while not self.ik_client.wait_for_service(timeout_sec=2.0):
@@ -86,8 +112,11 @@ class DualArmActionClient(Node):
 
     # ── IK 요청 ─────────────────────────────────────────────────────────────
     def _request_ik(self, group_name, pose_data, prev_state, callback):
+        tip_link = 'L_7' if group_name == 'left_arm' else 'R_7'
+
         req = GetPositionIK.Request()
         req.ik_request.group_name  = group_name
+        req.ik_request.ik_link_name = tip_link
         req.ik_request.timeout     = Duration(sec=5, nanosec=0)
         req.ik_request.constraints = Constraints()
 
@@ -154,7 +183,7 @@ class DualArmActionClient(Node):
             p = JointTrajectoryPoint()
             positions = [point.positions[plan_names.index(n)] for n in arm_joints]
             if gripper_joint:
-                positions.append(gripper_pos)
+                positions.append(float(gripper_pos))
             p.positions  = positions
             p.velocities = [0.0] * len(all_joints)
             p.time_from_start = point.time_from_start
@@ -181,9 +210,14 @@ class DualArmActionClient(Node):
         if self.left_idx >= len(self.left_targets):
             self.get_logger().info('🏁 왼팔 모든 목표 완료!')
             return
+        target = self.left_targets[self.left_idx]
         self.get_logger().info(f'[LEFT] 스텝 {self.left_idx + 1}/{len(self.left_targets)} 계획 중...')
-        self._request_ik('left_arm', self.left_targets[self.left_idx],
-                         self.left_prev_state, self._left_ik_cb)
+        if 'joints' in target:
+            # IK 생략, joint 값 직접 지정 (원점 복귀 등)
+            self._request_trajectory('left_arm', self.left_arm_joints,
+                                     target['joints'], self.left_prev_state, self._left_plan_cb)
+        else:
+            self._request_ik('left_arm', target, self.left_prev_state, self._left_ik_cb)
 
     def _left_ik_cb(self, future):
         res = future.result()
@@ -201,12 +235,25 @@ class DualArmActionClient(Node):
     def _left_plan_cb(self, future):
         res = future.result()
         if res.motion_plan_response.error_code.val != 1:
-            self.get_logger().error('❌ [LEFT] 궤적 계획 실패')
-            rclpy.shutdown()
+            code = res.motion_plan_response.error_code.val
+            if self.left_retry < self.MAX_RETRY:
+                self.left_retry += 1
+                self.get_logger().warn(f'⚠️ [LEFT] 궤적 계획 실패 (code={code}), 재시도 {self.left_retry}/{self.MAX_RETRY}')
+                self.process_next_left()
+            else:
+                self.get_logger().error(f'❌ [LEFT] 궤적 계획 최대 재시도 초과 (code={code}), 건너뜀')
+                self.left_retry = 0
+                self.left_idx += 1
+                self.process_next_left()
             return
+        self.left_retry = 0
         self.get_logger().info(f'[LEFT] 스텝 {self.left_idx + 1} 전송 중...')
+        target = self.left_targets[self.left_idx]
+        gripper_pos = target.get('gripper')
         self._send_trajectory(self._left_action_client, res,
-                              self.left_arm_joints, 'LEFT', self._left_result_cb)
+                              self.left_arm_joints, 'LEFT', self._left_result_cb,
+                              gripper_joint='gripper_L' if gripper_pos is not None else None,
+                              gripper_pos=float(gripper_pos) if gripper_pos is not None else 0.0)
 
     def _left_result_cb(self, future):
         # ★ 여기서 도달 확인 후 다음 스텝 진행
@@ -222,9 +269,13 @@ class DualArmActionClient(Node):
         if self.right_idx >= len(self.right_targets):
             self.get_logger().info('🏁 오른팔 모든 목표 완료!')
             return
+        target = self.right_targets[self.right_idx]
         self.get_logger().info(f'[RIGHT] 스텝 {self.right_idx + 1}/{len(self.right_targets)} 계획 중...')
-        self._request_ik('right_arm', self.right_targets[self.right_idx],
-                         self.right_prev_state, self._right_ik_cb)
+        if 'joints' in target:
+            self._request_trajectory('right_arm', self.right_arm_joints,
+                                     target['joints'], self.right_prev_state, self._right_plan_cb)
+        else:
+            self._request_ik('right_arm', target, self.right_prev_state, self._right_ik_cb)
 
     def _right_ik_cb(self, future):
         res = future.result()
@@ -242,14 +293,24 @@ class DualArmActionClient(Node):
     def _right_plan_cb(self, future):
         res = future.result()
         if res.motion_plan_response.error_code.val != 1:
-            self.get_logger().error('❌ [RIGHT] 궤적 계획 실패')
-            rclpy.shutdown()
+            if self.right_retry < self.MAX_RETRY:
+                self.right_retry += 1
+                self.get_logger().warn(f'⚠️ [RIGHT] 궤적 계획 실패, 재시도 {self.right_retry}/{self.MAX_RETRY}')
+                self.process_next_right()
+            else:
+                self.get_logger().error('❌ [RIGHT] 궤적 계획 최대 재시도 초과, 건너뜀')
+                self.right_retry = 0
+                self.right_idx += 1
+                self.process_next_right()
             return
+        self.right_retry = 0
         self.get_logger().info(f'[RIGHT] 스텝 {self.right_idx + 1} 전송 중...')
         target = self.right_targets[self.right_idx]
+        gripper_pos = target.get('gripper')
         self._send_trajectory(self._right_action_client, res,
                               self.right_arm_joints, 'RIGHT', self._right_result_cb,
-                              gripper_joint='gripper_R', gripper_pos=target['gripper'])
+                              gripper_joint='gripper_R' if gripper_pos is not None else None,
+                              gripper_pos=float(gripper_pos) if gripper_pos is not None else 0.0)
 
     def _right_result_cb(self, future):
         # ★ 여기서 도달 확인 후 다음 스텝 진행

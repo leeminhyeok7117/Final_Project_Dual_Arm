@@ -76,46 +76,56 @@ def return_to_origin(timeout: float = 15.0):
             _packet_handler.write1ByteTxRx(_port_handler, dxl_id, ADDR_OPERATING_MODE, OP_MODE_EXT_POSITION)
             _packet_handler.write1ByteTxRx(_port_handler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
 
-        # ── 2. 복귀 속도 설정 + 목표 위치 일괄 전송 ──────────────────────────
+        FIRST_IDS = {1, 11}
+        first_group = {k: v for k, v in MOTOR_HOME.items() if k in FIRST_IDS}
+        rest_group  = {k: v for k, v in MOTOR_HOME.items() if k not in FIRST_IDS}
+
         sync_write = GroupSyncWrite(_port_handler, _packet_handler, ADDR_GOAL_POSITION, 4)
 
-        for dxl_id, home in MOTOR_HOME.items():
-            _packet_handler.write4ByteTxRx(_port_handler, dxl_id, ADDR_PROFILE_VELOCITY, RETURN_VELOCITY)
-            home_u = home & 0xFFFFFFFF
-            param  = [
-                DXL_LOBYTE(DXL_LOWORD(home_u)), DXL_HIBYTE(DXL_LOWORD(home_u)),
-                DXL_LOBYTE(DXL_HIWORD(home_u)), DXL_HIBYTE(DXL_HIWORD(home_u)),
-            ]
-            sync_write.addParam(dxl_id, param)
+        def _send_group(group: dict):
+            for dxl_id, home in group.items():
+                _packet_handler.write4ByteTxRx(_port_handler, dxl_id, ADDR_PROFILE_VELOCITY, RETURN_VELOCITY)
+                home_u = home & 0xFFFFFFFF
+                param  = [
+                    DXL_LOBYTE(DXL_LOWORD(home_u)), DXL_HIBYTE(DXL_LOWORD(home_u)),
+                    DXL_LOBYTE(DXL_HIWORD(home_u)), DXL_HIBYTE(DXL_HIWORD(home_u)),
+                ]
+                sync_write.addParam(dxl_id, param)
+            sync_write.txPacket()
+            sync_write.clearParam()
 
-        sync_write.txPacket()
-        sync_write.clearParam()
+        def _wait_group(group: dict, label: str):
+            start = time.time()
+            while True:
+                all_done     = True
+                status_parts = []
+                for dxl_id, home in group.items():
+                    pos, _, _ = _packet_handler.read4ByteTxRx(
+                        _port_handler, dxl_id, ADDR_PRESENT_POSITION)
+                    if pos > 2147483647:
+                        pos -= 4294967296
+                    err = abs(pos - home)
+                    status_parts.append(f"ID{dxl_id}:{err:>4d}")
+                    if err > ARRIVAL_TOL:
+                        all_done = False
 
-        # ── 3. 도달 대기 ──────────────────────────────────────────────────────
-        start = time.time()
-        while True:
-            all_done     = True
-            status_parts = []
-            for dxl_id, home in MOTOR_HOME.items():
-                pos, _, _ = _packet_handler.read4ByteTxRx(
-                    _port_handler, dxl_id, ADDR_PRESENT_POSITION)
-                if pos > 2147483647:
-                    pos -= 4294967296
-                err = abs(pos - home)
-                status_parts.append(f"ID{dxl_id}:{err:>4d}")
-                if err > ARRIVAL_TOL:
-                    all_done = False
+                print(f"\r  [{label}] 오차(ticks) | {' | '.join(status_parts)} |", end='', flush=True)
 
-            print(f"\r  오차(ticks) | {' | '.join(status_parts)} |", end='', flush=True)
+                if all_done:
+                    print(f"\n[원점 복귀] ✅ {label} 완료!")
+                    break
+                if time.time() - start > timeout:
+                    print(f"\n[원점 복귀] ⚠️  {label} 타임아웃 — 일부 모터 미달.")
+                    break
+                time.sleep(0.05)
 
-            if all_done:
-                print("\n[원점 복귀] ✅ 완료!")
-                break
-            if time.time() - start > timeout:
-                print("\n[원점 복귀] ⚠️  타임아웃 — 일부 모터 미달.")
-                break
+        # ── 2a. 1번·11번 먼저 복귀 ────────────────────────────────────────────
+        _send_group(first_group)
+        _wait_group(first_group, "1·11번 복귀")
 
-            time.sleep(0.05)
+        # ── 2b. 나머지 동시 복귀 ──────────────────────────────────────────────
+        _send_group(rest_group)
+        _wait_group(rest_group, "나머지 복귀")
 
         # ── 4. 속도 프로파일 초기화 ───────────────────────────────────────────
         for dxl_id in MOTOR_HOME:

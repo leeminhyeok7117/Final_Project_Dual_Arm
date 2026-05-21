@@ -7,11 +7,6 @@
 
     <!-- ==================== BASE ==================== -->
     <link name="base">
-        <inertial>
-            <origin xyz="0.0015551149356303046 0.05999996256359216 -0.267866126509443" rpy="0.0 0.0 0.0" />
-            <mass value="32.55922417276492" />
-            <inertia ixx="8.891823837865752" iyy="8.704949103049135" izz="1.0127442240706743" ixy="-6.502443736710814e-08" iyz="1.0072645971748173e-06" ixz="0.03259763261668536" />
-        </inertial>
         <visual name="base_visual">
             <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
             <geometry>
@@ -350,7 +345,7 @@
         <parent link="R_2" />
         <child link="R_3" />
         <axis xyz="0.9396930000000002 -8.431443962615327e-33 0.34202000000000005" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="1.02" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.32" />
     </joint>
 
     <!-- R_4: elbow pitch        | -120° ~ +10° -->
@@ -359,7 +354,7 @@
         <parent link="R_3" />
         <child link="R_4" />
         <axis xyz="4.930380657631324e-32 4.930380657631324e-32 1.0" />
-        <limit lower="-2.0944" upper="0.1745" effort="10.0" velocity="1.02" />
+        <limit lower="-2.0944" upper="0.1745" effort="10.0" velocity="0.32" />
     </joint>
 
     <!-- R_5: wrist rotation     | ±180° -->
@@ -368,7 +363,7 @@
         <parent link="R_4" />
         <child link="R_5" />
         <axis xyz="0.5 3.110751833242902e-30 -0.866025" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="5.11" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.32" />
     </joint>
 
     <!-- R_6: wrist pitch        | ±100° -->
@@ -377,7 +372,7 @@
         <parent link="R_5" />
         <child link="R_6" />
         <axis xyz="0.866025 0.49999999999999994 8.539665818050335e-32" />
-        <limit lower="-1.7453" upper="1.7453" effort="10.0" velocity="5.11" />
+        <limit lower="-1.7453" upper="1.7453" effort="10.0" velocity="0.32" />
     </joint>
 
     <!-- R_7: 7th DOF (new)     | ±180° -->
@@ -386,7 +381,7 @@
         <parent link="R_6" />
         <child link="R_7" />
         <axis xyz="0.0 -1.0 -3.1554436208840472e-30" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="5.11" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.32" />
     </joint>
 
     <!-- ==================== LEFT ARM JOINTS ==================== -->
@@ -414,7 +409,7 @@
         <parent link="L_2" />
         <child link="L_3" />
         <axis xyz="-0.9396930000000002 -8.431443962615327e-33 -0.34202000000000005" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="1.02" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.32" />
     </joint>
 
     <!-- L_4: elbow pitch        | -120° ~ +10° -->
@@ -423,7 +418,7 @@
         <parent link="L_3" />
         <child link="L_4" />
         <axis xyz="4.930380657631324e-32 4.930380657631324e-32 -1.0" />
-        <limit lower="-2.0944" upper="0.1745" effort="10.0" velocity="1.02" />
+        <limit lower="-2.0944" upper="0.1745" effort="10.0" velocity="0.32" />
     </joint>
 
     <!-- L_5: wrist rotation     | ±180° -->
@@ -432,7 +427,7 @@
         <parent link="L_4" />
         <child link="L_5" />
         <axis xyz="-0.5 3.12307778488698e-30 0.866025" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="5.11" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.32" />
     </joint>
 
     <!-- L_6: wrist pitch        | ±100° -->
@@ -441,7 +436,7 @@
         <parent link="L_5" />
         <child link="L_6" />
         <axis xyz="0.866025 0.5 0.0" />
-        <limit lower="-1.7453" upper="1.7453" effort="10.0" velocity="5.11" />
+        <limit lower="-1.7453" upper="1.7453" effort="10.0" velocity="0.32" />
     </joint>
 
     <!-- L_7: 7th DOF (new)     | ±180° -->
@@ -450,7 +445,7 @@
         <parent link="L_6" />
         <child link="L_7" />
         <axis xyz="0.0 1.0 3.1554436208840472e-30" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="5.11" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.32" />
     </joint>
 
 </robot>
