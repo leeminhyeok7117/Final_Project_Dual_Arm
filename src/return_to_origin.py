@@ -30,7 +30,7 @@ from calibrate_origin_keyboard import (
     TORQUE_ENABLE, TORQUE_DISABLE,
 )
 
-RETURN_VELOCITY = 200
+RETURN_VELOCITY = 100
 ARRIVAL_TOL     = 150
 
 # 등록된 핸들러 (register() 호출 시 채워짐)

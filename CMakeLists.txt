@@ -30,6 +30,7 @@ install(PROGRAMS
   src/gripper_guard.py
   src/trajectory_recorder.py
   src/trajectory_player.py
+  src/scene_publisher.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

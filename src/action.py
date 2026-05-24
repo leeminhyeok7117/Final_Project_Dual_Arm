@@ -14,8 +14,6 @@ from dynamixel_sdk import *
 from dynamixel_sdk import GroupSyncRead
 import calibrate_origin_keyboard as calib
 from return_to_origin import return_to_origin
-import gripper_guard
-import subprocess
 
 # ── 오른팔: 모터 ID 1-7 ──────────────────────────────────────────────────────
 # rot_R1→1, rot_R2→2, rot_R3→3, rot_R4→4, rot_R5→5, rot_R6→6, gripper_R→7
@@ -45,9 +43,8 @@ class DualArmActionServer(Node):
     def __init__(self, port_handler, packet_handler):
         super().__init__('dual_arm_action_server')
 
-        # joint_state_broadcaster만 비활성화 (action.py가 /joint_states 직접 발행)
-        # left_arm_hw / right_arm_hw JointTrajectoryController는 ros2_controllers.yaml에서 제거됨
-        subprocess.run(['ros2', 'control', 'set_controller_state', 'joint_state_broadcaster', 'inactive'], capture_output=True)
+        # joint_state_broadcaster는 ros2_controllers.yaml에서 제거됨
+        # action.py가 /joint_states를 직접 발행
 
         self.portHandler   = port_handler
         self.packetHandler = packet_handler
@@ -83,9 +80,8 @@ class DualArmActionServer(Node):
         self.right_step = 0
         self.left_step  = 0
 
-        self.raw_log_timer     = self.create_timer(1.0,  self.log_raw_motor_values)
-        self.gripper_chk_timer = self.create_timer(0.1,  self._gripper_guard_check)   # 10Hz
-        self.state_timer       = self.create_timer(1.0,  self.publish_current_state)  # 1Hz
+        self.raw_log_timer = self.create_timer(1.0, self.log_raw_motor_values)
+        self.state_timer   = self.create_timer(0.1, self.publish_joint_state_from_cache)  # 10Hz (no bus)
 
         cb_group = ReentrantCallbackGroup()
 
@@ -103,17 +99,22 @@ class DualArmActionServer(Node):
             self.left_execute_callback,
             callback_group=cb_group
         )
-        gripper_guard.configure(dxl_id_=RIGHT_JOINT_NAME_TO_ID['gripper_R'], threshold_percent=80)
         self.get_logger().info('🤖 양팔 다이나믹셀 액션 서버 가동 완료! 명령을 기다립니다...')
 
     def capture_current_state_as_origin(self):
         # ID별 가속도 설정 (단위: 214.577 rev/min²/unit)
+        # 각 관절의 joint_limits.yaml max_acceleration과 일치하도록 설정
+        # 계산: register = joint_accel(rad/s²) × gear × (3600/2π) / 214.577
+        # 15:1: 0.80 × 15 × 572.96 / 214.577 ≈ 32
+        # 5:1:  1.50 ×  5 × 572.96 / 214.577 ≈ 20
+        # 9:1:  0.83 ×  9 × 572.96 / 214.577 ≈ 20
+        # 1:1:  7.50 ×  1 × 572.96 / 214.577 ≈ 20
         ACCEL_PER_ID = {
-            1: 20,  2: 20,
-            3: 20,  4: 20,
+            1: 32,  2: 32,   # 15:1 → 0.80 rad/s²
+            3: 20,  4: 20,   #  5:1 → 1.50,  9:1 → 0.83 rad/s²
             5: 20,  6: 20,
             7: 20,  8: 20,
-            11: 20, 12: 20,
+            11: 32, 12: 32,  # 15:1 → 0.80 rad/s²
             13: 20, 14: 20,
             15: 20, 16: 20,
             17: 20, 18: 20,
@@ -190,6 +191,14 @@ class DualArmActionServer(Node):
         msg.position = positions
         self.joint_pub.publish(msg)
 
+        # 하드웨어 실측값을 캐시에도 반영 (10Hz 타이머가 이 값을 그대로 발행)
+        for i, name in enumerate(self.right_joints):
+            if name in names:
+                self.right_current_angles[i] = positions[names.index(name)]
+        for i, name in enumerate(self.left_joints):
+            if name in names:
+                self.left_current_angles[i] = positions[names.index(name)]
+
         g_names, g_positions = [], []
         for entry in gripper_joints:
             rad = _read_rad(*entry)
@@ -205,29 +214,6 @@ class DualArmActionServer(Node):
             self.gripper_pub.publish(gmsg)
 
     
-    def _gripper_guard_check(self):
-        gripper_id = RIGHT_JOINT_NAME_TO_ID['gripper_R']
-        with self.port_lock:
-            load_raw, result, _ = self.packetHandler.read2ByteTxRx(
-                self.portHandler, gripper_id, 126)
-        if result != COMM_SUCCESS:
-            return
-        if load_raw > 32767:
-            load_raw -= 65536
-        load_pct = load_raw / 10.0
-        if gripper_guard.check(load_pct):
-            with self.port_lock:
-                cur_pos, result, _ = self.packetHandler.read4ByteTxRx(
-                    self.portHandler, gripper_id, 132)
-            if result != COMM_SUCCESS:
-                return
-            if cur_pos > 2147483647:
-                cur_pos -= 4294967296
-            goal_u = cur_pos & 0xFFFFFFFF
-            with self.port_lock:
-                self.packetHandler.write4ByteTxRx(
-                    self.portHandler, gripper_id, 116, goal_u)
-
     def log_raw_motor_values(self):
         id_to_name = {v: k for k, v in {**RIGHT_JOINT_NAME_TO_ID, **LEFT_JOINT_NAME_TO_ID}.items()}
         all_ids    = list(RIGHT_JOINT_NAME_TO_ID.values()) + list(LEFT_JOINT_NAME_TO_ID.values())
@@ -263,15 +249,10 @@ class DualArmActionServer(Node):
             return FollowJointTrajectory.Result()
 
         last_goal_pulses = {}
-        prev_angles      = {name: getattr(self, angles_ref_name)[i]
-                            for i, name in enumerate(target_joints)}
-        prev_t = 0.0
-        K      = 60.0 / (2 * math.pi * 0.229)  # joint rad/s → DXL velocity units
-        t0     = time.monotonic()               # 궤적 시작 기준 시각
+        t0 = time.monotonic()  # 궤적 시작 기준 시각
 
         for idx, point in enumerate(points):
             t_target = point.time_from_start.sec + point.time_from_start.nanosec / 1e9
-            delta_t  = max(t_target - prev_t, 0.001)
 
             # 경유점 발송 시각까지 대기 (RViz와 동일한 타이밍)
             if idx > 0:
@@ -281,9 +262,8 @@ class DualArmActionServer(Node):
 
             current_ref = getattr(self, angles_ref_name)
             angles      = []
+            items       = []  # (dxl_id, goal_pulse, dxl_vel)
 
-            # 1단계: 목표 펄스와 이동 거리 계산
-            items = []  # (name, dxl_id, goal, dxl_vel)
             for i, name in enumerate(target_joints):
                 dxl_id = joint_name_to_id[name]
                 rad    = point.positions[joint_names.index(name)] if name in joint_names else current_ref[i]
@@ -295,18 +275,11 @@ class DualArmActionServer(Node):
                     delta_deg    = math.degrees(rad)
                     pulse_change = int(delta_deg * gear_ratios[dxl_id]
                                       * (4096.0 / 360.0) * direction_map[dxl_id])
-                    goal     = self.initial_motor_pulses[dxl_id] + pulse_change
-                    dist_rad = abs(rad - prev_angles[name])
-                    if dist_rad > 1e-4:
-                        gear    = gear_ratios[dxl_id]
-                        hw_cap  = max(1, int(self.BASE_DXL_VEL * gear / 15))
-                        raw_vel = int(dist_rad / delta_t * gear * K)
-                        dxl_vel = max(1, min(raw_vel, hw_cap))
-                    else:
-                        dxl_vel = 1
-                    items.append((dxl_id, goal, dxl_vel))
+                    goal    = self.initial_motor_pulses[dxl_id] + pulse_change
+                    hw_cap  = max(1, int(self.BASE_DXL_VEL * gear_ratios[dxl_id] / 15))
+                    items.append((dxl_id, goal, hw_cap))
 
-            # 2단계: Profile Velocity(addr 112, 4B) + Goal Position(addr 116, 4B) 동시 SyncWrite
+            # Profile Velocity(addr 112, 4B) + Goal Position(addr 116, 4B) 동시 SyncWrite
             with self.port_lock:
                 for dxl_id, goal, dxl_vel in items:
                     last_goal_pulses[dxl_id] = goal
@@ -322,10 +295,7 @@ class DualArmActionServer(Node):
                 sync_write.txPacket()
                 sync_write.clearParam()
 
-            for i, name in enumerate(target_joints):
-                prev_angles[name] = angles[i]
             setattr(self, angles_ref_name, angles)
-            prev_t = t_target
 
         # 마지막 포인트 도달 대기
         self.get_logger().info('⏳ 마지막 위치 도달 대기 중...')
@@ -353,7 +323,12 @@ class DualArmActionServer(Node):
                 break
             time.sleep(0.01)
 
+        # 하드웨어 실측값으로 캐시 업데이트 후 MoveIt에 최종 상태 전달
         self.publish_current_state()
+        for _ in range(5):
+            self.publish_joint_state_from_cache()
+            time.sleep(0.02)
+
         goal_handle.succeed()
         result            = FollowJointTrajectory.Result()
         result.error_code = FollowJointTrajectory.Result.SUCCESSFUL

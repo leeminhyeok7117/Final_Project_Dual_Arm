@@ -11,8 +11,11 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 
 from builtin_interfaces.msg import Duration
 from moveit_msgs.srv import GetPositionIK, GetMotionPlan
-from moveit_msgs.msg import Constraints, JointConstraint
-from geometry_msgs.msg import PoseStamped
+from moveit_msgs.msg import (Constraints, JointConstraint,
+                              AttachedCollisionObject, CollisionObject,
+                              PlanningScene)
+from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
+from shape_msgs.msg import SolidPrimitive
 from control_msgs.action import FollowJointTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -35,56 +38,33 @@ class DualArmActionClient(Node):
             '/right_arm_hw/follow_joint_trajectory',
             callback_group=cb)
         
-        # L_4(인덱스3) 기어비 5:1→9:1 보정: 기존값 × 5/9 (반올림)
+        # planner 키: 'PTP' (PILZ, 장애물 없는 구간) | 'RRTConnect' (OMPL, 장애물 회피 필요)
+        # 생략 시 기본값 'PTP' 사용
         self.left_targets = [
-            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048},
-            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 1},
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
 
-            {'joints': deg(120, -54, 92,  -1, 72, 52, -8), 'gripper': 1},
+            {'joints': deg(51, -49, 62, -13, 64, 28, -6), 'gripper': 2048,   'planner': 'PTP'},
 
-            {'joints': deg(108, -32, 52,  -8, 32, 47, 10), 'gripper': 1},
+            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 2048,   'planner': 'PTP'},
+            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1,   'planner': 'PTP'},
 
-            {'joints': deg(98, -30, 48,   -7, 20, 45, 14), 'gripper': 1},
-            {'joints': deg(98, -30, 48,   -7, 20, 45, 14), 'gripper': 400},
+            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1,   'planner': 'PTP'},
+            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1200,   'planner': 'PTP', 'attach': True},
 
-            {'joints': deg(90, -43, 57,  -11, 48, 46, -19), 'gripper': 400},
-            {'joints': deg(-18, -17, -76, -10, 85, 7, -20), 'gripper': 400},
+            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1200,   'planner': 'PTP'},
 
-            {'joints': deg(38, -3, -58,    9, 14, 36, 9), 'gripper': 400},
-            {'joints': deg(38, -3, -58,    9, 14, 36, 9), 'gripper': 1},
+            #장애물 회피구간임 주의
+            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1200, 'planner': 'RRTConnect'},
 
-            {'joints': deg(-18, -17, -76, -10, 85, 7, -20), 'gripper': 1},
+            {'joints': deg(38, -4, -58, 11, 14, 40, 15), 'gripper': 1200, 'planner': 'PTP'},
+            {'joints': deg(38, -4, -58, 11, 14, 40, 15), 'gripper': 1,   'planner': 'PTP', 'detach': True},
 
-            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 1},
-            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048},
+            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1, 'planner': 'PTP'},
+
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 1,     'planner': 'PTP'},
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
         ]
-
-        # self.right_targets = [
-            # 1. 초기 위치 (그리퍼 0 또는 이전 상태 유지)
-            # {'x': 0.322, 'y': -0.121, 'z': 0.124, 'qx': 0.707, 'qy': 0.000, 'qz': 0.000, 'qw': 0.707, 'gripper': 0.0},
-
-            # # 2. 이동 위치 1
-            # {'x': 0.335, 'y': -0.121, 'z': -0.083, 'qx': 0.670, 'qy': 0.227, 'qz': -0.227, 'qw': 0.670, 'gripper': 0.0},
-            # {'x': 0.335, 'y': -0.121, 'z': -0.083, 'qx': 0.670, 'qy': 0.227, 'qz': -0.227, 'qw': 0.670, 'gripper': 2.764},
-
-            # # 3. 이동 위치 2
-            # {'x': 0.345, 'y': -0.121, 'z': -0.155, 'qx': 0.643, 'qy': 0.294, 'qz': -0.294, 'qw': 0.643, 'gripper': 2.764},
-            # {'x': 0.345, 'y': -0.121, 'z': -0.155, 'qx': 0.643, 'qy': 0.294, 'qz': -0.294, 'qw': 0.643, 'gripper': 0.2},
-
-            # # 4. 이동 위치 3
-            # {'x': 0.335, 'y': -0.090, 'z': 0.063, 'qx': 0.721, 'qy': 0.337, 'qz': 0.058, 'qw': 0.602, 'gripper': 0.2},
-
-            # # 5. 이동 위치 4
-            # {'x': 0.370, 'y': 0.048, 'z': -0.057, 'qx': 0.575, 'qy': 0.546, 'qz': -0.139, 'qw': 0.593, 'gripper': 0.2},
-            # {'x': 0.370, 'y': 0.048, 'z': -0.057, 'qx': 0.575, 'qy': 0.546, 'qz': -0.139, 'qw': 0.593, 'gripper': 2.764},
-            # {'x': 0.370, 'y': 0.048, 'z': -0.057, 'qx': 0.575, 'qy': 0.546, 'qz': -0.139, 'qw': 0.593, 'gripper': 0.0},
-        # ]
-        # self.left_targets = [
-        #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
-        #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
-        #     {'x': 0.000, 'y': 0.241, 'z': -0.450, 'qx': -0.707, 'qy': 0.000, 'qz': -0.000, 'qw': 0.707},
-        # ]
-        self.right_targets =[]
+        self.right_targets = []
 
         self.left_arm_joints  = ['L_1', 'L_2', 'L_3', 'L_4', 'L_5', 'L_6', 'L_7']
         self.right_arm_joints = ['R_1', 'R_2', 'R_3', 'R_4', 'R_5', 'R_6', 'R_7']
@@ -99,6 +79,8 @@ class DualArmActionClient(Node):
         self.right_retry      = 0
         self.MAX_RETRY        = 5
 
+        self._scene_pub = self.create_publisher(PlanningScene, '/planning_scene', 10)
+
         self.get_logger().info('⏳ MoveIt 서비스 대기 중...')
         while not self.ik_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().info('/compute_ik 대기 중...')
@@ -109,6 +91,71 @@ class DualArmActionClient(Node):
         # 양팔 독립적으로 시작 (각자 result 기다린 후 다음 스텝 진행)
         self.process_next_left()
         self.process_next_right()
+
+    # ── 파지 물체 부착 / 해제 ────────────────────────────────────────────────
+    # L_7 기준 물체 위치/방향 — 직접 측정해서 조정
+    GRIPPER_TIP_OFFSET_X = -0.07   # 좌우 (m)
+    GRIPPER_TIP_OFFSET_Y = 0.00   # 앞뒤 (m)
+    GRIPPER_TIP_OFFSET_Z = 0.15   # L_7→그리퍼 팁 거리 (m)
+    GRIPPER_ROLL_DEG     = 0.0    # X축 회전 (도)
+    GRIPPER_PITCH_DEG    = -25.0    # Y축 회전 (도)  ← 조정
+    GRIPPER_YAW_DEG      = 0.0    # Z축 회전 (도)
+
+    def _attach_object(self, link: str, obj_id: str,
+                       size=(0.28, 0.20, 0.05)):
+        """Box collision object를 link에 부착 (MoveIt 충돌 인식용)."""
+        import math
+        r = math.radians(self.GRIPPER_ROLL_DEG)
+        p = math.radians(self.GRIPPER_PITCH_DEG)
+        y = math.radians(self.GRIPPER_YAW_DEG)
+        cy, sy = math.cos(y/2), math.sin(y/2)
+        cp, sp = math.cos(p/2), math.sin(p/2)
+        cr, sr = math.cos(r/2), math.sin(r/2)
+        qx = sr*cp*cy - cr*sp*sy
+        qy = cr*sp*cy + sr*cp*sy
+        qz = cr*cp*sy - sr*sp*cy
+        qw = cr*cp*cy + sr*sp*sy
+
+        prim = SolidPrimitive(type=SolidPrimitive.BOX, dimensions=list(size))
+        pose = Pose(
+            position=Point(
+                x=self.GRIPPER_TIP_OFFSET_X,
+                y=self.GRIPPER_TIP_OFFSET_Y,
+                z=self.GRIPPER_TIP_OFFSET_Z + size[2] / 2.0,
+            ),
+            orientation=Quaternion(x=qx, y=qy, z=qz, w=qw),
+        )
+
+        aco = AttachedCollisionObject()
+        aco.link_name                  = link
+        aco.object.id                  = obj_id
+        aco.object.header.frame_id     = link
+        aco.object.header.stamp        = self.get_clock().now().to_msg()
+        aco.object.operation           = CollisionObject.ADD
+        aco.object.primitives          = [prim]
+        aco.object.primitive_poses     = [pose]
+        # L_7(손목)과 L_6(그 윗 링크)를 허용 — 물체가 크면 L_6까지 겹칠 수 있음
+        arm = 'L' if link.startswith('L') else 'R'
+        aco.touch_links = [f'{arm}_6', f'{arm}_7', 'desk']
+
+        ps = PlanningScene(is_diff=True)
+        ps.robot_state.is_diff = True
+        ps.robot_state.attached_collision_objects = [aco]
+        self._scene_pub.publish(ps)
+        self.get_logger().info(f'[SCENE] {obj_id} → {link} 부착')
+
+    def _detach_object(self, link: str, obj_id: str):
+        """부착된 collision object 해제."""
+        aco = AttachedCollisionObject()
+        aco.link_name        = link
+        aco.object.id        = obj_id
+        aco.object.operation = CollisionObject.REMOVE
+
+        ps = PlanningScene(is_diff=True)
+        ps.robot_state.is_diff = True
+        ps.robot_state.attached_collision_objects = [aco]
+        self._scene_pub.publish(ps)
+        self.get_logger().info(f'[SCENE] {obj_id} 해제')
 
     # ── IK 요청 ─────────────────────────────────────────────────────────────
     def _request_ik(self, group_name, pose_data, prev_state, callback):
@@ -139,15 +186,23 @@ class DualArmActionClient(Node):
         self.ik_client.call_async(req).add_done_callback(callback)
 
     # ── 궤적 계획 요청 ───────────────────────────────────────────────────────
-    def _request_trajectory(self, group_name, arm_joints, target_positions, prev_state, callback):
+    def _request_trajectory(self, group_name, arm_joints, target_positions, prev_state, callback,
+                            planner='PTP'):
         req = GetMotionPlan.Request()
-        req.motion_plan_request.group_name                      = group_name
-        req.motion_plan_request.planner_id = "RRTConnect"
-        req.motion_plan_request.num_planning_attempts           = 10
-        req.motion_plan_request.allowed_planning_time           = 5.0
+        req.motion_plan_request.group_name            = group_name
+        req.motion_plan_request.allowed_planning_time = 5.0
         req.motion_plan_request.max_velocity_scaling_factor     = 1.0
         req.motion_plan_request.max_acceleration_scaling_factor = 1.0
-        req.motion_plan_request.path_constraints                = Constraints()
+        req.motion_plan_request.path_constraints      = Constraints()
+
+        if planner == 'PTP':
+            req.motion_plan_request.pipeline_id           = "pilz_industrial_motion_planner"
+            req.motion_plan_request.planner_id            = "PTP"
+            req.motion_plan_request.num_planning_attempts = 1
+        else:  # RRTConnect
+            req.motion_plan_request.pipeline_id           = "ompl"
+            req.motion_plan_request.planner_id            = "RRTConnect"
+            req.motion_plan_request.num_planning_attempts = 10
         
 
         if prev_state is None:
@@ -206,16 +261,18 @@ class DualArmActionClient(Node):
     # ══════════════════════════════════════════════════════════════════════════
     # 왼팔: IK → plan → send → result → 다음 스텝
     # ══════════════════════════════════════════════════════════════════════════
-    def process_next_left(self):
+    def process_next_left(self, fallback=False):
         if self.left_idx >= len(self.left_targets):
             self.get_logger().info('🏁 왼팔 모든 목표 완료!')
             return
-        target = self.left_targets[self.left_idx]
-        self.get_logger().info(f'[LEFT] 스텝 {self.left_idx + 1}/{len(self.left_targets)} 계획 중...')
+        target  = self.left_targets[self.left_idx]
+        planner = 'RRTConnect' if fallback else target.get('planner', 'PTP')
+        self.get_logger().info(
+            f'[LEFT] 스텝 {self.left_idx + 1}/{len(self.left_targets)} 계획 중... [{planner}]')
         if 'joints' in target:
-            # IK 생략, joint 값 직접 지정 (원점 복귀 등)
             self._request_trajectory('left_arm', self.left_arm_joints,
-                                     target['joints'], self.left_prev_state, self._left_plan_cb)
+                                     target['joints'], self.left_prev_state,
+                                     self._left_plan_cb, planner=planner)
         else:
             self._request_ik('left_arm', target, self.left_prev_state, self._left_ik_cb)
 
@@ -229,21 +286,33 @@ class DualArmActionClient(Node):
         all_names  = list(res.solution.joint_state.name)
         all_pos    = list(res.solution.joint_state.position)
         target_pos = [all_pos[all_names.index(n)] for n in self.left_arm_joints]
+        target  = self.left_targets[self.left_idx]
+        planner = target.get('planner', 'PTP')
         self._request_trajectory('left_arm', self.left_arm_joints, target_pos,
-                                 self.left_prev_state, self._left_plan_cb)
+                                 self.left_prev_state, self._left_plan_cb, planner=planner)
 
     def _left_plan_cb(self, future):
-        res = future.result()
-        if res.motion_plan_response.error_code.val != 1:
-            code = res.motion_plan_response.error_code.val
-            if self.left_retry < self.MAX_RETRY:
+        res  = future.result()
+        code = res.motion_plan_response.error_code.val
+        if code != 1:
+            target          = self.left_targets[self.left_idx]
+            current_planner = target.get('planner', 'PTP')
+            # PTP 실패 → RRTConnect로 자동 폴백
+            if current_planner == 'PTP' and self.left_retry == 0:
+                self.get_logger().warn(
+                    f'⚠️ [LEFT] PTP 실패 (code={code}), RRTConnect로 폴백')
                 self.left_retry += 1
-                self.get_logger().warn(f'⚠️ [LEFT] 궤적 계획 실패 (code={code}), 재시도 {self.left_retry}/{self.MAX_RETRY}')
+                self.process_next_left(fallback=True)
+            elif self.left_retry < self.MAX_RETRY:
+                self.left_retry += 1
+                self.get_logger().warn(
+                    f'⚠️ [LEFT] 궤적 계획 실패 (code={code}), 재시도 {self.left_retry}/{self.MAX_RETRY}')
                 self.process_next_left()
             else:
-                self.get_logger().error(f'❌ [LEFT] 궤적 계획 최대 재시도 초과 (code={code}), 건너뜀')
+                self.get_logger().error(
+                    f'❌ [LEFT] 궤적 계획 최대 재시도 초과 (code={code}), 건너뜀')
                 self.left_retry = 0
-                self.left_idx += 1
+                self.left_idx  += 1
                 self.process_next_left()
             return
         self.left_retry = 0
@@ -256,8 +325,16 @@ class DualArmActionClient(Node):
                               gripper_pos=float(gripper_pos) if gripper_pos is not None else 0.0)
 
     def _left_result_cb(self, future):
-        # ★ 여기서 도달 확인 후 다음 스텝 진행
-        self.get_logger().info(f'✅ [LEFT] 스텝 {self.left_idx + 1} 도달 완료!')
+        result = future.result().result
+        target = self.left_targets[self.left_idx]
+        if result.error_code != FollowJointTrajectory.Result.SUCCESSFUL:
+            self.get_logger().error(f'❌ [LEFT] 스텝 {self.left_idx + 1} 실패 (error_code={result.error_code}), 건너뜀')
+        else:
+            self.get_logger().info(f'✅ [LEFT] 스텝 {self.left_idx + 1} 도달 완료!')
+            if target.get('attach'):
+                self._attach_object('L_7', 'grasped_object')
+            elif target.get('detach'):
+                self._detach_object('L_7', 'grasped_object')
         self.left_prev_state = self.left_pending
         self.left_idx += 1
         self.process_next_left()
@@ -265,15 +342,18 @@ class DualArmActionClient(Node):
     # ══════════════════════════════════════════════════════════════════════════
     # 오른팔: IK → plan → send → result → 다음 스텝
     # ══════════════════════════════════════════════════════════════════════════
-    def process_next_right(self):
+    def process_next_right(self, fallback=False):
         if self.right_idx >= len(self.right_targets):
             self.get_logger().info('🏁 오른팔 모든 목표 완료!')
             return
-        target = self.right_targets[self.right_idx]
-        self.get_logger().info(f'[RIGHT] 스텝 {self.right_idx + 1}/{len(self.right_targets)} 계획 중...')
+        target  = self.right_targets[self.right_idx]
+        planner = 'RRTConnect' if fallback else target.get('planner', 'PTP')
+        self.get_logger().info(
+            f'[RIGHT] 스텝 {self.right_idx + 1}/{len(self.right_targets)} 계획 중... [{planner}]')
         if 'joints' in target:
             self._request_trajectory('right_arm', self.right_arm_joints,
-                                     target['joints'], self.right_prev_state, self._right_plan_cb)
+                                     target['joints'], self.right_prev_state,
+                                     self._right_plan_cb, planner=planner)
         else:
             self._request_ik('right_arm', target, self.right_prev_state, self._right_ik_cb)
 
@@ -287,20 +367,31 @@ class DualArmActionClient(Node):
         all_names  = list(res.solution.joint_state.name)
         all_pos    = list(res.solution.joint_state.position)
         target_pos = [all_pos[all_names.index(n)] for n in self.right_arm_joints]
+        target  = self.right_targets[self.right_idx]
+        planner = target.get('planner', 'PTP')
         self._request_trajectory('right_arm', self.right_arm_joints, target_pos,
-                                 self.right_prev_state, self._right_plan_cb)
+                                 self.right_prev_state, self._right_plan_cb, planner=planner)
 
     def _right_plan_cb(self, future):
-        res = future.result()
-        if res.motion_plan_response.error_code.val != 1:
-            if self.right_retry < self.MAX_RETRY:
+        res  = future.result()
+        code = res.motion_plan_response.error_code.val
+        if code != 1:
+            target          = self.right_targets[self.right_idx]
+            current_planner = target.get('planner', 'PTP')
+            if current_planner == 'PTP' and self.right_retry == 0:
+                self.get_logger().warn(
+                    f'⚠️ [RIGHT] PTP 실패 (code={code}), RRTConnect로 폴백')
                 self.right_retry += 1
-                self.get_logger().warn(f'⚠️ [RIGHT] 궤적 계획 실패, 재시도 {self.right_retry}/{self.MAX_RETRY}')
+                self.process_next_right(fallback=True)
+            elif self.right_retry < self.MAX_RETRY:
+                self.right_retry += 1
+                self.get_logger().warn(
+                    f'⚠️ [RIGHT] 궤적 계획 실패 (code={code}), 재시도 {self.right_retry}/{self.MAX_RETRY}')
                 self.process_next_right()
             else:
                 self.get_logger().error('❌ [RIGHT] 궤적 계획 최대 재시도 초과, 건너뜀')
                 self.right_retry = 0
-                self.right_idx += 1
+                self.right_idx  += 1
                 self.process_next_right()
             return
         self.right_retry = 0
@@ -313,8 +404,11 @@ class DualArmActionClient(Node):
                               gripper_pos=float(gripper_pos) if gripper_pos is not None else 0.0)
 
     def _right_result_cb(self, future):
-        # ★ 여기서 도달 확인 후 다음 스텝 진행
-        self.get_logger().info(f'✅ [RIGHT] 스텝 {self.right_idx + 1} 도달 완료!')
+        result = future.result().result
+        if result.error_code != FollowJointTrajectory.Result.SUCCESSFUL:
+            self.get_logger().error(f'❌ [RIGHT] 스텝 {self.right_idx + 1} 실패 (error_code={result.error_code}), 건너뜀')
+        else:
+            self.get_logger().info(f'✅ [RIGHT] 스텝 {self.right_idx + 1} 도달 완료!')
         self.right_prev_state = self.right_pending
         self.right_idx += 1
         self.process_next_right()
