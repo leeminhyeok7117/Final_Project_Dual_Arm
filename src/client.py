@@ -13,9 +13,10 @@ from builtin_interfaces.msg import Duration
 from moveit_msgs.srv import GetPositionIK, GetMotionPlan
 from moveit_msgs.msg import (Constraints, JointConstraint,
                               AttachedCollisionObject, CollisionObject,
-                              PlanningScene)
+                              PlanningScene, ObjectColor)
 from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
 from shape_msgs.msg import SolidPrimitive
+from std_msgs.msg import ColorRGBA, Int32
 from control_msgs.action import FollowJointTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -38,37 +39,101 @@ class DualArmActionClient(Node):
             '/right_arm_hw/follow_joint_trajectory',
             callback_group=cb)
         
-        # planner 키: 'PTP' (PILZ, 장애물 없는 구간) | 'RRTConnect' (OMPL, 장애물 회피 필요)
-        # 생략 시 기본값 'PTP' 사용
-        self.left_targets = [
+        # ── 시나리오 정의 ─────────────────────────────────────────────────────
+        # planner 키: 'PTP' | 'RRTConnect' | 'RRTstar'
+        self._scenario1_left = [
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
-
             {'joints': deg(51, -49, 62, -13, 64, 28, -6), 'gripper': 2048,   'planner': 'PTP'},
-
             {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 2048,   'planner': 'PTP'},
             {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1,   'planner': 'PTP'},
-
             {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1,   'planner': 'PTP'},
-            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1200,   'planner': 'PTP', 'attach': True},
-
-            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1200,   'planner': 'PTP'},
-
-            #장애물 회피구간임 주의
-            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1200, 'planner': 'RRTConnect'},
-
-            {'joints': deg(38, -4, -58, 11, 14, 40, 15), 'gripper': 1200, 'planner': 'PTP'},
-            {'joints': deg(38, -4, -58, 11, 14, 40, 15), 'gripper': 1,   'planner': 'PTP', 'detach': True},
-
+            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1220,   'planner': 'PTP', 'attach': True},
+            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1220,   'planner': 'PTP', 'add_blocker': True},
+            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1220, 'planner': 'RRTstar', 'remove_blocker': True},
+            {'joints': deg(35, -2, -57, 12, 16, 41, 10), 'gripper': 1220, 'planner': 'PTP'},
+            {'joints': deg(35, -2, -57, 12, 16, 41, 10), 'gripper': 1,   'planner': 'PTP', 'detach': True},
             {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1, 'planner': 'PTP'},
-
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 1,     'planner': 'PTP'},
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
         ]
-        self.right_targets = []
+        self._scenario1_right = [
+        ]
 
+        self._scenario2_left  = [
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
+            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 2048, 'planner': 'PTP'},
+            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1, 'planner': 'PTP'},
+            {'joints': deg(35, -2, -57, 12, 16, 41, 10), 'gripper': 1, 'planner': 'PTP'},
+            {'joints': deg(35, -2, -57, 12, 16, 41, 10), 'gripper': 1220, 'planner': 'PTP', 'attach': True},
+            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1220, 'planner': 'PTP', 'add_blocker': True},
+            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1220,   'planner': 'RRTstar', 'remove_blocker': True},
+            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1220,   'planner': 'PTP'},
+            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1,   'planner': 'PTP', 'detach': True},
+            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1,   'planner': 'PTP'},
+            {'joints': deg(51, -49, 62, -13, 64, 28, -6), 'gripper': 1,   'planner': 'PTP'},
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 1,     'planner': 'PTP'},
+            {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
+            
+        ]  # 추후 정의
+        self._scenario2_right = []  # 추후 정의
+
+        # ── 실행 상태 ─────────────────────────────────────────────────────────
+        self.left_targets     = []
+        self.right_targets    = []
         self.left_arm_joints  = ['L_1', 'L_2', 'L_3', 'L_4', 'L_5', 'L_6', 'L_7']
         self.right_arm_joints = ['R_1', 'R_2', 'R_3', 'R_4', 'R_5', 'R_6', 'R_7']
+        self.left_idx         = 0
+        self.right_idx        = 0
+        self.left_prev_state  = None
+        self.right_prev_state = None
+        self.left_pending     = None
+        self.right_pending    = None
+        self.left_retry       = 0
+        self.right_retry      = 0
+        self.MAX_RETRY        = 5
+        self._running         = False
+        self._left_done       = False
+        self._right_done      = False
 
+        self._scene_pub = self.create_publisher(PlanningScene, '/planning_scene', 10)
+        self.create_subscription(Int32, '/scenario_trigger', self._trigger_cb, 10,
+                                 callback_group=cb)
+
+        self.get_logger().info('⏳ MoveIt 서비스 대기 중...')
+        while not self.ik_client.wait_for_service(timeout_sec=2.0):
+            self.get_logger().info('/compute_ik 대기 중...')
+        while not self.plan_client.wait_for_service(timeout_sec=2.0):
+            self.get_logger().info('/plan_kinematic_path 대기 중...')
+        self.get_logger().info('✅ 준비 완료. /scenario_trigger 토픽 대기 중 (1=시나리오1, 2=시나리오2)')
+
+    # ── 시나리오 트리거 / 제어 ───────────────────────────────────────────────
+    def _trigger_cb(self, msg: Int32):
+        if self._running:
+            self.get_logger().warn(f'⚠️ 이미 실행 중입니다. 시나리오 {msg.data} 무시')
+            return
+        if msg.data == 1:
+            self._start_scenario(1)
+        elif msg.data == 2:
+            self._start_scenario(2)
+        else:
+            self.get_logger().warn(f'⚠️ 알 수 없는 시나리오 번호: {msg.data}')
+
+    def _start_scenario(self, num: int):
+        self.get_logger().info(f'🚀 시나리오 {num} 시작')
+        self._running   = True
+        self._left_done = False
+        self._right_done = False
+        self._reset_state()
+        if num == 1:
+            self.left_targets  = self._scenario1_left
+            self.right_targets = self._scenario1_right
+        elif num == 2:
+            self.left_targets  = self._scenario2_left
+            self.right_targets = self._scenario2_right
+        self.process_next_left()
+        self.process_next_right()
+
+    def _reset_state(self):
         self.left_idx        = 0
         self.right_idx       = 0
         self.left_prev_state  = None
@@ -77,32 +142,23 @@ class DualArmActionClient(Node):
         self.right_pending    = None
         self.left_retry       = 0
         self.right_retry      = 0
-        self.MAX_RETRY        = 5
 
-        self._scene_pub = self.create_publisher(PlanningScene, '/planning_scene', 10)
-
-        self.get_logger().info('⏳ MoveIt 서비스 대기 중...')
-        while not self.ik_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().info('/compute_ik 대기 중...')
-        while not self.plan_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().info('/plan_kinematic_path 대기 중...')
-        self.get_logger().info('✅ MoveIt 서비스 연결 성공!')
-
-        # 양팔 독립적으로 시작 (각자 result 기다린 후 다음 스텝 진행)
-        self.process_next_left()
-        self.process_next_right()
+    def _check_scenario_done(self):
+        if self._left_done and self._right_done:
+            self._running = False
+            self.get_logger().info('✅ 시나리오 완료. 다음 트리거 대기 중...')
 
     # ── 파지 물체 부착 / 해제 ────────────────────────────────────────────────
     # L_7 기준 물체 위치/방향 — 직접 측정해서 조정
-    GRIPPER_TIP_OFFSET_X = -0.07   # 좌우 (m)
+    GRIPPER_TIP_OFFSET_X = -0.03   # 좌우 (m)
     GRIPPER_TIP_OFFSET_Y = 0.00   # 앞뒤 (m)
-    GRIPPER_TIP_OFFSET_Z = 0.15   # L_7→그리퍼 팁 거리 (m)
+    GRIPPER_TIP_OFFSET_Z = 0.12   # L_7→그리퍼 팁 거리 (m)
     GRIPPER_ROLL_DEG     = 0.0    # X축 회전 (도)
-    GRIPPER_PITCH_DEG    = -25.0    # Y축 회전 (도)  ← 조정
+    GRIPPER_PITCH_DEG    = -21.0    # Y축 회전 (도)  ← 조정
     GRIPPER_YAW_DEG      = 0.0    # Z축 회전 (도)
 
     def _attach_object(self, link: str, obj_id: str,
-                       size=(0.28, 0.20, 0.05)):
+                       size=(0.26, 0.17, 0.03)):
         """Box collision object를 link에 부착 (MoveIt 충돌 인식용)."""
         import math
         r = math.radians(self.GRIPPER_ROLL_DEG)
@@ -144,18 +200,59 @@ class DualArmActionClient(Node):
         self._scene_pub.publish(ps)
         self.get_logger().info(f'[SCENE] {obj_id} → {link} 부착')
 
+    def _add_desk_blocker(self):
+        prim = SolidPrimitive(type=SolidPrimitive.BOX, dimensions=[1.0, 1.0, 0.2])
+        pose = Pose(
+            position=Point(x=0.47, y=0.85, z=-0.32),
+            orientation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0),
+        )
+        co = CollisionObject()
+        co.header.frame_id = 'base'
+        co.header.stamp    = self.get_clock().now().to_msg()
+        co.id              = 'desk_blocker'
+        co.operation       = CollisionObject.ADD
+        co.primitives      = [prim]
+        co.primitive_poses = [pose]
+
+        color = ObjectColor()
+        color.id    = 'desk_blocker'
+        color.color = ColorRGBA(r=0.0, g=0.0, b=0.0, a=0.0)
+
+        ps = PlanningScene(is_diff=True)
+        ps.world.collision_objects = [co]
+        ps.object_colors           = [color]
+        self._scene_pub.publish(ps)
+        self.get_logger().info('[SCENE] desk_blocker 추가')
+
+    def _remove_desk_blocker(self):
+        co = CollisionObject()
+        co.header.frame_id = 'base'
+        co.header.stamp    = self.get_clock().now().to_msg()
+        co.id              = 'desk_blocker'
+        co.operation       = CollisionObject.REMOVE
+
+        ps = PlanningScene(is_diff=True)
+        ps.world.collision_objects = [co]
+        self._scene_pub.publish(ps)
+        self.get_logger().info('[SCENE] desk_blocker 제거')
+
     def _detach_object(self, link: str, obj_id: str):
-        """부착된 collision object 해제."""
+        """부착된 collision object 해제 + world에서도 제거."""
         aco = AttachedCollisionObject()
         aco.link_name        = link
         aco.object.id        = obj_id
         aco.object.operation = CollisionObject.REMOVE
 
+        co = CollisionObject()
+        co.id        = obj_id
+        co.operation = CollisionObject.REMOVE
+
         ps = PlanningScene(is_diff=True)
         ps.robot_state.is_diff = True
         ps.robot_state.attached_collision_objects = [aco]
+        ps.world.collision_objects = [co]
         self._scene_pub.publish(ps)
-        self.get_logger().info(f'[SCENE] {obj_id} 해제')
+        self.get_logger().info(f'[SCENE] {obj_id} 해제 및 world 제거')
 
     # ── IK 요청 ─────────────────────────────────────────────────────────────
     def _request_ik(self, group_name, pose_data, prev_state, callback):
@@ -199,6 +296,11 @@ class DualArmActionClient(Node):
             req.motion_plan_request.pipeline_id           = "pilz_industrial_motion_planner"
             req.motion_plan_request.planner_id            = "PTP"
             req.motion_plan_request.num_planning_attempts = 1
+        elif planner == 'RRTstar':
+            req.motion_plan_request.pipeline_id           = "ompl"
+            req.motion_plan_request.planner_id            = "RRTstar"
+            req.motion_plan_request.allowed_planning_time = 10.0
+            req.motion_plan_request.num_planning_attempts = 5
         else:  # RRTConnect
             req.motion_plan_request.pipeline_id           = "ompl"
             req.motion_plan_request.planner_id            = "RRTConnect"
@@ -261,12 +363,19 @@ class DualArmActionClient(Node):
     # ══════════════════════════════════════════════════════════════════════════
     # 왼팔: IK → plan → send → result → 다음 스텝
     # ══════════════════════════════════════════════════════════════════════════
-    def process_next_left(self, fallback=False):
+    def process_next_left(self, fallback=False, planner_override=None):
         if self.left_idx >= len(self.left_targets):
             self.get_logger().info('🏁 왼팔 모든 목표 완료!')
+            self._left_done = True
+            self._check_scenario_done()
             return
         target  = self.left_targets[self.left_idx]
-        planner = 'RRTConnect' if fallback else target.get('planner', 'PTP')
+        if planner_override:
+            planner = planner_override
+        elif fallback:
+            planner = 'RRTConnect'
+        else:
+            planner = target.get('planner', 'PTP')
         self.get_logger().info(
             f'[LEFT] 스텝 {self.left_idx + 1}/{len(self.left_targets)} 계획 중... [{planner}]')
         if 'joints' in target:
@@ -297,7 +406,7 @@ class DualArmActionClient(Node):
         if code != 1:
             target          = self.left_targets[self.left_idx]
             current_planner = target.get('planner', 'PTP')
-            # PTP 실패 → RRTConnect로 자동 폴백
+            # PTP 실패 → RRTConnect로 폴백
             if current_planner == 'PTP' and self.left_retry == 0:
                 self.get_logger().warn(
                     f'⚠️ [LEFT] PTP 실패 (code={code}), RRTConnect로 폴백')
@@ -335,6 +444,10 @@ class DualArmActionClient(Node):
                 self._attach_object('L_7', 'grasped_object')
             elif target.get('detach'):
                 self._detach_object('L_7', 'grasped_object')
+            if target.get('add_blocker'):
+                self._add_desk_blocker()
+            elif target.get('remove_blocker'):
+                self._remove_desk_blocker()
         self.left_prev_state = self.left_pending
         self.left_idx += 1
         self.process_next_left()
@@ -342,12 +455,19 @@ class DualArmActionClient(Node):
     # ══════════════════════════════════════════════════════════════════════════
     # 오른팔: IK → plan → send → result → 다음 스텝
     # ══════════════════════════════════════════════════════════════════════════
-    def process_next_right(self, fallback=False):
+    def process_next_right(self, fallback=False, planner_override=None):
         if self.right_idx >= len(self.right_targets):
             self.get_logger().info('🏁 오른팔 모든 목표 완료!')
+            self._right_done = True
+            self._check_scenario_done()
             return
         target  = self.right_targets[self.right_idx]
-        planner = 'RRTConnect' if fallback else target.get('planner', 'PTP')
+        if planner_override:
+            planner = planner_override
+        elif fallback:
+            planner = 'RRTConnect'
+        else:
+            planner = target.get('planner', 'PTP')
         self.get_logger().info(
             f'[RIGHT] 스텝 {self.right_idx + 1}/{len(self.right_targets)} 계획 중... [{planner}]')
         if 'joints' in target:

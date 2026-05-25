@@ -22,7 +22,7 @@ MM_TO_M       = 0.001
 PUBLISH_EVERY = 5.0   # seconds
 
 # ── Adjust these to position the desk relative to 'base' (metres) ────────────
-DESK_POSITION   = (0.57,  0.0,  -0.45)      # x, y, z
+DESK_POSITION   = (0.54,  0.0,  -0.45)      # x, y, z
 DESK_QUATERNION = (0.0,  0.0,  0.7071, 0.7071)  # z축 90도 회전
 
 

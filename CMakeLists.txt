@@ -31,6 +31,7 @@ install(PROGRAMS
   src/trajectory_recorder.py
   src/trajectory_player.py
   src/scene_publisher.py
+  src/command_server.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
