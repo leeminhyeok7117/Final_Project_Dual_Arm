@@ -19,10 +19,12 @@ from shape_msgs.msg import SolidPrimitive
 from std_msgs.msg import ColorRGBA, Int32
 from control_msgs.action import FollowJointTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+import json, os, subprocess, time as _time
+import numpy as np
 
 
 class DualArmActionClient(Node):
-    def __init__(self):
+    def __init__(self, metrics_config='ptp_rrtstar', out_dir='.'):
         super().__init__('dual_arm_action_client')
 
         cb = ReentrantCallbackGroup()
@@ -44,15 +46,15 @@ class DualArmActionClient(Node):
         self._scenario1_left = [
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
             {'joints': deg(51, -49, 62, -13, 64, 28, -6), 'gripper': 2048,   'planner': 'PTP'},
-            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 2048,   'planner': 'PTP'},
-            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1,   'planner': 'PTP'},
-            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1,   'planner': 'PTP'},
-            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1220,   'planner': 'PTP', 'attach': True},
-            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1220,   'planner': 'PTP', 'add_blocker': True},
-            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1220, 'planner': 'RRTstar', 'remove_blocker': True},
-            {'joints': deg(35, -2, -57, 12, 16, 41, 10), 'gripper': 1220, 'planner': 'PTP'},
-            {'joints': deg(35, -2, -57, 12, 16, 41, 10), 'gripper': 1,   'planner': 'PTP', 'detach': True},
-            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1, 'planner': 'PTP'},
+            {'joints': deg(135, 3, 85,  -20, -1, 80, 59), 'gripper': 2048,   'planner': 'PTP'},
+            {'joints': deg(135, 3, 85,  -20, -1, 80, 59), 'gripper': 1,   'planner': 'PTP'},
+            {'joints': deg(124, -11, 64, 3, -21, 59, 70), 'gripper': 1,   'planner': 'PTP'},
+            {'joints': deg(124, -11, 64, 3, -21, 59, 70), 'gripper': 1220,   'planner': 'PTP', 'attach': True},
+            {'joints': deg(135, 3, 85,  -20, -1, 80, 59), 'gripper': 1220,   'planner': 'PTP', 'add_blocker': True},
+            {'joints': deg(12, -15, -63, -9, 52, 33, -19), 'gripper': 1220, 'planner': 'RRTstar', 'remove_blocker': True},
+            {'joints': deg(26, -0, -58, 28, 14, 48, 18), 'gripper': 1220, 'planner': 'PTP'},
+            {'joints': deg(26, -0, -58, 28, 14, 48, 18), 'gripper': 1,   'planner': 'PTP', 'detach': True},
+            {'joints': deg(12, -15, -63, -9, 52, 33, -19), 'gripper': 1, 'planner': 'PTP'},
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 1,     'planner': 'PTP'},
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
         ]
@@ -61,15 +63,15 @@ class DualArmActionClient(Node):
 
         self._scenario2_left  = [
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
-            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 2048, 'planner': 'PTP'},
-            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1, 'planner': 'PTP'},
-            {'joints': deg(35, -2, -57, 12, 16, 41, 10), 'gripper': 1, 'planner': 'PTP'},
-            {'joints': deg(35, -2, -57, 12, 16, 41, 10), 'gripper': 1220, 'planner': 'PTP', 'attach': True},
-            {'joints': deg(36, -12, -51, -18, 33, 35, -13), 'gripper': 1220, 'planner': 'PTP', 'add_blocker': True},
-            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1220,   'planner': 'RRTstar', 'remove_blocker': True},
-            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1220,   'planner': 'PTP'},
-            {'joints': deg(129, -30, 66, 22, -19, 57, 84), 'gripper': 1,   'planner': 'PTP', 'detach': True},
-            {'joints': deg(140, -19, 91,  -2, -3, 80, 63), 'gripper': 1,   'planner': 'PTP'},
+            {'joints': deg(12, -15, -63, -9, 52, 33, -19), 'gripper': 2048, 'planner': 'PTP'},
+            {'joints': deg(12, -15, -63, -9, 52, 33, -19), 'gripper': 1, 'planner': 'PTP'},
+            {'joints': deg(26, -0, -58, 28, 14, 48, 18), 'gripper': 1, 'planner': 'PTP'},
+            {'joints': deg(26, -0, -58, 28, 14, 48, 18), 'gripper': 1220, 'planner': 'PTP', 'attach': True},
+            {'joints': deg(12, -15, -63, -9, 52, 33, -19), 'gripper': 1220, 'planner': 'PTP', 'add_blocker': True},
+            {'joints': deg(135, 3, 85,  -20, -1, 80, 59), 'gripper': 1220,   'planner': 'RRTstar', 'remove_blocker': True},
+            {'joints': deg(124, -11, 64, 3, -21, 59, 70), 'gripper': 1220,   'planner': 'PTP'},
+            {'joints': deg(124, -11, 64, 3, -21, 59, 70), 'gripper': 1,   'planner': 'PTP', 'detach': True},
+            {'joints': deg(135, 3, 85,  -20, -1, 80, 59), 'gripper': 1,   'planner': 'PTP'},
             {'joints': deg(51, -49, 62, -13, 64, 28, -6), 'gripper': 1,   'planner': 'PTP'},
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 1,     'planner': 'PTP'},
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
@@ -95,6 +97,14 @@ class DualArmActionClient(Node):
         self._left_done       = False
         self._right_done      = False
 
+        # ── 지표 수집 ─────────────────────────────────────────────────────────
+        self._metrics_config  = metrics_config
+        self._out_dir         = out_dir
+        self._metrics_data    = []
+        self._scenario_num    = 0
+        self._left_plan_t0    = 0.0
+        self._right_plan_t0   = 0.0
+
         self._scene_pub = self.create_publisher(PlanningScene, '/planning_scene', 10)
         self.create_subscription(Int32, '/scenario_trigger', self._trigger_cb, 10,
                                  callback_group=cb)
@@ -104,7 +114,24 @@ class DualArmActionClient(Node):
             self.get_logger().info('/compute_ik 대기 중...')
         while not self.plan_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().info('/plan_kinematic_path 대기 중...')
-        self.get_logger().info('✅ 준비 완료. /scenario_trigger 토픽 대기 중 (1=시나리오1, 2=시나리오2)')
+        self.get_logger().info('✅ 준비 완료. /scenario_trigger 토픽 또는 CLI 입력 대기 중 (1=시나리오1, 2=시나리오2)')
+
+        import threading
+        threading.Thread(target=self._cli_input_loop, daemon=True).start()
+
+    # ── CLI 입력 루프 ────────────────────────────────────────────────────────
+    def _cli_input_loop(self):
+        while True:
+            try:
+                line = input('시나리오 선택 (1 / 2): ').strip()
+                if line == '1':
+                    self._trigger_cb(Int32(data=1))
+                elif line == '2':
+                    self._trigger_cb(Int32(data=2))
+                else:
+                    print('⚠️  1 또는 2를 입력하세요.')
+            except EOFError:
+                break
 
     # ── 시나리오 트리거 / 제어 ───────────────────────────────────────────────
     def _trigger_cb(self, msg: Int32):
@@ -120,9 +147,11 @@ class DualArmActionClient(Node):
 
     def _start_scenario(self, num: int):
         self.get_logger().info(f'🚀 시나리오 {num} 시작')
-        self._running   = True
-        self._left_done = False
+        self._running    = True
+        self._left_done  = False
         self._right_done = False
+        self._metrics_data  = []
+        self._scenario_num  = num
         self._reset_state()
         if num == 1:
             self.left_targets  = self._scenario1_left
@@ -147,6 +176,7 @@ class DualArmActionClient(Node):
         if self._left_done and self._right_done:
             self._running = False
             self.get_logger().info('✅ 시나리오 완료. 다음 트리거 대기 중...')
+            self._save_metrics()
 
     # ── 파지 물체 부착 / 해제 ────────────────────────────────────────────────
     # L_7 기준 물체 위치/방향 — 직접 측정해서 조정
@@ -203,7 +233,7 @@ class DualArmActionClient(Node):
     def _add_desk_blocker(self):
         prim = SolidPrimitive(type=SolidPrimitive.BOX, dimensions=[1.0, 1.0, 0.2])
         pose = Pose(
-            position=Point(x=0.47, y=0.85, z=-0.32),
+            position=Point(x=0.47, y=0.85, z=-0.35),
             orientation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0),
         )
         co = CollisionObject()
@@ -285,6 +315,10 @@ class DualArmActionClient(Node):
     # ── 궤적 계획 요청 ───────────────────────────────────────────────────────
     def _request_trajectory(self, group_name, arm_joints, target_positions, prev_state, callback,
                             planner='PTP'):
+        if group_name == 'left_arm':
+            self._left_plan_t0  = _time.time()
+        else:
+            self._right_plan_t0 = _time.time()
         req = GetMotionPlan.Request()
         req.motion_plan_request.group_name            = group_name
         req.motion_plan_request.allowed_planning_time = 5.0
@@ -370,7 +404,9 @@ class DualArmActionClient(Node):
             self._check_scenario_done()
             return
         target  = self.left_targets[self.left_idx]
-        if planner_override:
+        if self._metrics_config == 'rrtconnect':
+            planner = 'RRTConnect'
+        elif planner_override:
             planner = planner_override
         elif fallback:
             planner = 'RRTConnect'
@@ -425,6 +461,14 @@ class DualArmActionClient(Node):
                 self.process_next_left()
             return
         self.left_retry = 0
+        planner_used = ('RRTConnect' if self._metrics_config == 'rrtconnect'
+                        else self.left_targets[self.left_idx].get('planner', 'PTP'))
+        m = self._compute_traj_metrics(
+            res.motion_plan_response.trajectory.joint_trajectory,
+            _time.time() - self._left_plan_t0,
+            self.left_idx, 'LEFT', planner_used)
+        if m:
+            self._metrics_data.append(m)
         self.get_logger().info(f'[LEFT] 스텝 {self.left_idx + 1} 전송 중...')
         target = self.left_targets[self.left_idx]
         gripper_pos = target.get('gripper')
@@ -462,7 +506,9 @@ class DualArmActionClient(Node):
             self._check_scenario_done()
             return
         target  = self.right_targets[self.right_idx]
-        if planner_override:
+        if self._metrics_config == 'rrtconnect':
+            planner = 'RRTConnect'
+        elif planner_override:
             planner = planner_override
         elif fallback:
             planner = 'RRTConnect'
@@ -515,6 +561,14 @@ class DualArmActionClient(Node):
                 self.process_next_right()
             return
         self.right_retry = 0
+        planner_used = ('RRTConnect' if self._metrics_config == 'rrtconnect'
+                        else self.right_targets[self.right_idx].get('planner', 'PTP'))
+        m = self._compute_traj_metrics(
+            res.motion_plan_response.trajectory.joint_trajectory,
+            _time.time() - self._right_plan_t0,
+            self.right_idx, 'RIGHT', planner_used)
+        if m:
+            self._metrics_data.append(m)
         self.get_logger().info(f'[RIGHT] 스텝 {self.right_idx + 1} 전송 중...')
         target = self.right_targets[self.right_idx]
         gripper_pos = target.get('gripper')
@@ -534,9 +588,101 @@ class DualArmActionClient(Node):
         self.process_next_right()
 
 
+    # ── 지표 계산 ─────────────────────────────────────────────────────────────
+    def _compute_traj_metrics(self, jt, plan_time, step_idx, arm, planner_used):
+        pts = jt.points
+        if len(pts) < 3:
+            return None
+        names = list(jt.joint_names)
+        nj    = len(names)
+        pos   = np.array([[p.positions[j] for j in range(nj)] for p in pts])
+        t     = np.array([p.time_from_start.sec + p.time_from_start.nanosec * 1e-9
+                          for p in pts])
+        dp       = np.diff(pos, axis=0)
+        path_len = float(np.sum(np.abs(dp)))
+        direct   = float(np.sum(np.abs(pos[-1] - pos[0])))
+        detour   = path_len / max(direct, 1e-6)
+
+        dt  = np.maximum(np.diff(t), 1e-6)
+        vel = dp / dt[:, None]
+        dv  = np.diff(vel, axis=0)
+        acc = dv / np.maximum(dt[1:], 1e-6)[:, None]
+
+        if len(acc) >= 2:
+            jerk     = np.diff(acc, axis=0) / np.maximum(dt[2:], 1e-6)[:, None]
+            jerk_rms = float(np.sqrt(np.mean(jerk ** 2)))
+        else:
+            jerk_rms = 0.0
+
+        accel_var = float(np.mean(np.var(acc, axis=0))) if len(acc) > 0 else 0.0
+        signs     = np.sign(dp)
+        reversals = int(np.sum(np.abs(np.diff(signs, axis=0)) > 1)) if len(signs) > 1 else 0
+
+        # 시계열 데이터 (시간 중점값 기준)
+        vel_t   = ((t[:-1] + t[1:]) / 2).tolist()
+        vel_rms = np.sqrt(np.mean(vel ** 2, axis=1)).tolist()
+        if len(acc) > 0:
+            acc_t   = ((t[1:-1] + t[2:]) / 2).tolist()
+            acc_rms = np.sqrt(np.mean(acc ** 2, axis=1)).tolist()
+        else:
+            acc_t, acc_rms = [], []
+
+        return {
+            'step':         step_idx + 1,
+            'arm':          arm,
+            'planner':      planner_used,
+            'path_len':     round(path_len, 4),
+            'detour_ratio': round(min(detour, 99.0), 4),
+            'n_waypoints':  len(pts),
+            'plan_time':    round(plan_time, 3),
+            'accel_var':    round(accel_var, 6),
+            'jerk_rms':     round(jerk_rms, 4),
+            'reversals':    reversals,
+            'duration':     round(float(t[-1] - t[0]), 4),
+            'vel_t':        vel_t,
+            'vel_rms':      vel_rms,
+            'acc_t':        acc_t,
+            'acc_rms':      acc_rms,
+        }
+
+    def _save_metrics(self):
+        if not self._metrics_data:
+            return
+        fname = f'metrics_{self._metrics_config}_s{self._scenario_num}.json'
+        fpath = os.path.join(self._out_dir, fname)
+        with open(fpath, 'w') as f:
+            json.dump({'config': self._metrics_config,
+                       'scenario': self._scenario_num,
+                       'steps': self._metrics_data}, f, indent=2)
+        self.get_logger().info(f'📊 지표 저장: {fpath}')
+
+        other      = 'rrtconnect' if self._metrics_config == 'ptp_rrtstar' else 'ptp_rrtstar'
+        other_path = os.path.join(self._out_dir,
+                                   f'metrics_{other}_s{self._scenario_num}.json')
+        script     = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   'plot_compare.py')
+        if not os.path.exists(script):
+            return
+        if os.path.exists(other_path):
+            self.get_logger().info('📈 비교 그래프 생성 중...')
+            subprocess.Popen(['python3', script, fpath, other_path])
+        else:
+            subprocess.Popen(['python3', script, fpath])
+
+
 def main(args=None):
-    rclpy.init(args=args)
-    node = DualArmActionClient()
+    import argparse
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument('--config', choices=['ptp_rrtstar', 'rrtconnect'],
+                    default='ptp_rrtstar',
+                    help='플래너 설정 (ptp_rrtstar | rrtconnect)')
+    ap.add_argument('--out-dir', default='.',
+                    help='지표 JSON/PNG 저장 경로')
+    known, ros_args = ap.parse_known_args()
+
+    rclpy.init(args=ros_args if args is None else args)
+    node = DualArmActionClient(metrics_config=known.config,
+                               out_dir=known.out_dir)
     executor = MultiThreadedExecutor()
     try:
         rclpy.spin(node, executor=executor)

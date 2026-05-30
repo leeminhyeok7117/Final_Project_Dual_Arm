@@ -23,7 +23,7 @@ RIGHT_JOINT_NAME_TO_ID = {
     'R_4': 4, 'R_5': 5, 'R_6': 6, 'R_7': 7,
     'gripper_R': 8
 }
-RIGHT_GEAR_RATIOS   = {1: 15, 2: 15, 3: 5, 4: 9, 5: 1, 6: 1, 7: 1, 8: 1}
+RIGHT_GEAR_RATIOS   = {1: 15, 2: 15, 3: 9, 4: 9, 5: 1, 6: 1, 7: 1, 8: 1}
 # URDF rot_R3/R4/R5/R6 axis=-Z (대칭 반전) → 단일팔 대비 방향 반전 적용
 RIGHT_DIRECTION_MAP = {1: 1, 2: 1, 3: 1, 4: 1, 5: -1, 6: 1, 7: 1, 8: 1}
 
@@ -34,7 +34,7 @@ LEFT_JOINT_NAME_TO_ID = {
     'L_4': 14, 'L_5': 15, 'L_6': 16, 'L_7': 17,
     'gripper_L': 18
 }
-LEFT_GEAR_RATIOS   = {11: 15, 12: 15, 13: 5, 14: 9, 15: 1, 16: 1, 17: 1, 18: 1}
+LEFT_GEAR_RATIOS   = {11: 15, 12: 15, 13: 9, 14: 9, 15: 1, 16: 1, 17: 1, 18: 1}
 # URDF rot_L3/L4/L5/L6 axis=+Z → 단일팔과 동일 방향
 LEFT_DIRECTION_MAP = {11: -1, 12: -1, 13: 1, 14: -1, 15: -1, 16: 1, 17: 1, 18: 1}
 
@@ -79,6 +79,10 @@ class DualArmActionServer(Node):
         self.left_current_angles  = [0.0] * len(self.left_all_joints)
         self.right_step = 0
         self.left_step  = 0
+
+        # 그리퍼 소프트웨어 디바운스 상태
+        self._gripper_load_count = {8: 0, 18: 0}
+        self._gripper_frozen     = {8: False, 18: False}
 
         self.raw_log_timer = self.create_timer(1.0, self.log_raw_motor_values)
         self.state_timer   = self.create_timer(0.1, self.publish_joint_state_from_cache)  # 10Hz (no bus)
@@ -130,6 +134,21 @@ class DualArmActionServer(Node):
                 pos -= 4294967296
             self.initial_motor_pulses[dxl_id] = pos
             self.packetHandler.write4ByteTxRx(self.portHandler, dxl_id, 112, 0)
+
+        # ── 그리퍼: Current-Based Position Control (Operating Mode 5) ─────────
+        # 토크 OFF → 모드 변경 → 토크 ON → Goal Current 설정
+        for dxl_id in (8, 18):
+            g_name = 'gripper_R' if dxl_id == 8 else 'gripper_L'
+            self.packetHandler.write1ByteTxRx(self.portHandler, dxl_id, 64, 0)   # Torque OFF
+            self.packetHandler.write1ByteTxRx(self.portHandler, dxl_id, 11, 5)   # Mode 5
+            self.packetHandler.write1ByteTxRx(self.portHandler, dxl_id, 64, 1)   # Torque ON
+            self.packetHandler.write2ByteTxRx(self.portHandler, dxl_id, 102,     # Goal Current
+                                              self.GRIPPER_GOAL_CURRENT)
+            mode_rb, _, _ = self.packetHandler.read1ByteTxRx(self.portHandler, dxl_id, 11)
+            curr_rb, _, _ = self.packetHandler.read2ByteTxRx(self.portHandler, dxl_id, 102)
+            self.get_logger().info(
+                f'[그리퍼] {g_name} (ID{dxl_id}) 초기화 완료 — '
+                f'Mode={mode_rb} (5=전류기반위치제어), GoalCurrent={curr_rb}/{self.GRIPPER_GOAL_CURRENT}')
 
     def publish_joint_state_from_cache(self):
         """동작 완료 후 캐시된 각도값을 MoveIt에 전달 (버스 통신 없음)"""
@@ -214,6 +233,15 @@ class DualArmActionServer(Node):
             self.gripper_pub.publish(gmsg)
 
     
+    # Hardware Error Status (addr 70) 비트 의미
+    _HW_ERR_BITS = {
+        0x01: '입력전압 오류',
+        0x04: '과열',
+        0x08: '엔코더 오류',
+        0x10: '전기충격',
+        0x20: '과부화',
+    }
+
     def log_raw_motor_values(self):
         id_to_name = {v: k for k, v in {**RIGHT_JOINT_NAME_TO_ID, **LEFT_JOINT_NAME_TO_ID}.items()}
         all_ids    = list(RIGHT_JOINT_NAME_TO_ID.values()) + list(LEFT_JOINT_NAME_TO_ID.values())
@@ -224,19 +252,112 @@ class DualArmActionServer(Node):
         if result != COMM_SUCCESS:
             return
 
-        lines = []
+        GRIPPER_IDS = {8, 18}
+
         for dxl_id in all_ids:
-            if not self.sync_read.isAvailable(dxl_id, 132, 4):
-                continue
-            raw = self.sync_read.getData(dxl_id, 132, 4)
-            if raw > 2147483647:
-                raw -= 4294967296
-            lines.append(f'  ID{dxl_id:2d} ({id_to_name[dxl_id]:>12s}): {raw:>10d}')
+            name = id_to_name.get(dxl_id, f'ID{dxl_id}')
 
-        # self.get_logger().info('📊 모터 raw 위치값:\n' + '\n'.join(lines))
+            # ── Present Current / Load (addr 126, 2B) ─────────────────────────
+            if self.sync_read.isAvailable(dxl_id, 126, 2):
+                raw_val = self.sync_read.getData(dxl_id, 126, 2)
+                if raw_val > 32767:
+                    raw_val -= 65536
+                abs_val = abs(raw_val)
 
-    GRIPPER_DXL_VEL = 80   # 그리퍼 고정 속도
-    BASE_DXL_VEL    = 249  # 15:1 기어비 기준 DXL 속도 → 다른 기어비는 비례 계산
+                if dxl_id in GRIPPER_IDS:
+                    # XL430: addr 126 = Present Load (단위 0.1%, 범위 -1000~1000)
+                    load_pct  = abs_val * 0.1
+                    threshold_pct = self.GRIPPER_LOAD_THRESHOLD_PCT * 100.0  # 80.0%
+                    prev_cnt  = self._gripper_load_count[dxl_id]
+
+                    if load_pct >= threshold_pct:
+                        self._gripper_load_count[dxl_id] = min(prev_cnt + 1, self.GRIPPER_DEBOUNCE_COUNT)
+                        cnt = self._gripper_load_count[dxl_id]
+
+                        if cnt >= self.GRIPPER_DEBOUNCE_COUNT and not self._gripper_frozen[dxl_id]:
+                            # ── 동결: 현재 위치를 Goal Position으로 재기록 ──────────
+                            self._gripper_frozen[dxl_id] = True
+                            if self.sync_read.isAvailable(dxl_id, 132, 4):
+                                cur_pos = self.sync_read.getData(dxl_id, 132, 4)
+                                if cur_pos > 2147483647:
+                                    cur_pos -= 4294967296
+                            else:
+                                with self.port_lock:
+                                    cur_pos, _, _ = self.packetHandler.read4ByteTxRx(
+                                        self.portHandler, dxl_id, 132)
+                                if cur_pos > 2147483647:
+                                    cur_pos -= 4294967296
+                            with self.port_lock:
+                                self.packetHandler.write4ByteTxRx(
+                                    self.portHandler, dxl_id, 116, cur_pos & 0xFFFFFFFF)
+                            self.get_logger().warn(
+                                f'🛑 [그리퍼 동결] ID{dxl_id:2d} ({name}): '
+                                f'부하 {load_pct:.1f}% {self.GRIPPER_DEBOUNCE_COUNT}회 연속 → '
+                                f'위치 {cur_pos} 고정')
+                        else:
+                            # 디바운스 카운트가 증가했을 때만 로그 (동결 후 지속은 무로그)
+                            if prev_cnt != cnt:
+                                self.get_logger().warn(
+                                    f'🤏 [그리퍼] ID{dxl_id:2d} ({name}): '
+                                    f'부하 {load_pct:.1f}% ⚡[{cnt}/{self.GRIPPER_DEBOUNCE_COUNT}]')
+                    else:
+                        # 정상 범위: 이전에 이벤트가 있었을 때만 복귀 로그 출력
+                        if prev_cnt > 0 or self._gripper_frozen[dxl_id]:
+                            if self._gripper_frozen[dxl_id]:
+                                self.get_logger().info(
+                                    f'✅ [그리퍼 해제] ID{dxl_id:2d} ({name}): 부하 정상화 → 동결 해제')
+                            else:
+                                self.get_logger().info(
+                                    f'✅ [그리퍼] ID{dxl_id:2d} ({name}): 부하 정상 ({load_pct:.1f}%)')
+                        self._gripper_frozen[dxl_id]     = False
+                        self._gripper_load_count[dxl_id] = 0
+                        # 정상 상태 지속 중 → 무로그
+                else:
+                    # Position Control: Present Load (%)
+                    load_pct = abs_val * 0.1
+                    if load_pct > 80.0:
+                        self.get_logger().warn(
+                            f'⚠️  [고부하] ID{dxl_id:2d} ({name}): {load_pct:.1f}%')
+
+            # ── Hardware Error Status (addr 70, 1B) ───────────────────────────
+            with self.port_lock:
+                err, _, _ = self.packetHandler.read1ByteTxRx(self.portHandler, dxl_id, 70)
+            if err:
+                msgs = [desc for bit, desc in self._HW_ERR_BITS.items() if err & bit]
+                self.get_logger().error(
+                    f'🔥 [HW오류] ID{dxl_id:2d} ({name}): {", ".join(msgs)} (0x{err:02X})')
+
+                # 과부화 에러 → 자동 재부팅 + 복구
+                if err & 0x20:
+                    self.get_logger().warn(
+                        f'🔄 [재부팅] ID{dxl_id:2d} ({name}): 과부화 → 자동 복구 시작')
+                    with self.port_lock:
+                        self.packetHandler.reboot(self.portHandler, dxl_id)
+                    time.sleep(0.5)  # 재부팅 대기
+                    if dxl_id in (8, 18):
+                        g_name = 'gripper_R' if dxl_id == 8 else 'gripper_L'
+                        with self.port_lock:
+                            self.packetHandler.write1ByteTxRx(self.portHandler, dxl_id, 64, 0)
+                            self.packetHandler.write1ByteTxRx(self.portHandler, dxl_id, 11, 5)
+                            self.packetHandler.write1ByteTxRx(self.portHandler, dxl_id, 64, 1)
+                            self.packetHandler.write2ByteTxRx(
+                                self.portHandler, dxl_id, 102, self.GRIPPER_GOAL_CURRENT)
+                        self._gripper_frozen[dxl_id]     = False
+                        self._gripper_load_count[dxl_id] = 0
+                        self.get_logger().info(
+                            f'✅ [그리퍼 복구] ID{dxl_id:2d} ({g_name}): '
+                            f'재부팅 완료, Mode 5 + GoalCurrent={self.GRIPPER_GOAL_CURRENT} 재적용')
+                    else:
+                        with self.port_lock:
+                            self.packetHandler.write1ByteTxRx(self.portHandler, dxl_id, 64, 1)
+                        self.get_logger().info(
+                            f'✅ [복구] ID{dxl_id:2d} ({name}): 재부팅 후 토크 ON')
+
+    GRIPPER_GOAL_CURRENT       = 150   # Goal Current (단위: ~2.69mA) — 파지력 조절 시 변경
+    GRIPPER_DXL_VEL            = 80    # 그리퍼 Profile Velocity
+    GRIPPER_LOAD_THRESHOLD_PCT = 0.80  # 소프트웨어 디바운스 임계값 (Goal Current 대비 비율)
+    GRIPPER_DEBOUNCE_COUNT     = 2     # 연속 초과 횟수 → 위치 동결 (다이나믹셀 내부 보호 ~4s 이전에 선제 개입)
+    BASE_DXL_VEL               = 249   # 15:1 기어비 기준 DXL 속도 → 다른 기어비는 비례 계산
 
     def _execute_arm(self, goal_handle, joint_name_to_id, gear_ratios,
                  direction_map, target_joints, sync_write, angles_ref_name):
@@ -250,6 +371,13 @@ class DualArmActionServer(Node):
 
         last_goal_pulses = {}
         t0 = time.monotonic()  # 궤적 시작 기준 시각
+
+        # 궤적 시작 시 그리퍼 동결 상태 1회 초기화 (포인트마다 리셋 방지)
+        for name in target_joints:
+            if 'gripper' in name:
+                dxl_id = joint_name_to_id[name]
+                self._gripper_frozen[dxl_id]     = False
+                self._gripper_load_count[dxl_id] = 0
 
         for idx, point in enumerate(points):
             t_target = point.time_from_start.sec + point.time_from_start.nanosec / 1e9
@@ -270,6 +398,13 @@ class DualArmActionServer(Node):
                 angles.append(rad)
 
                 if 'gripper' in name:
+                    if self._gripper_frozen[dxl_id]:
+                        continue  # 동결 중: 현재 위치 유지, 명령 스킵
+                    if idx == 0:
+                        self.get_logger().info(
+                            f'🤏 [그리퍼 명령] {name} (ID{dxl_id}) → '
+                            f'목표펄스={int(rad)}, 속도={self.GRIPPER_DXL_VEL}, '
+                            f'전류한계={self.GRIPPER_GOAL_CURRENT}units')
                     items.append((dxl_id, int(rad), self.GRIPPER_DXL_VEL))
                 else:
                     delta_deg    = math.degrees(rad)
@@ -303,6 +438,8 @@ class DualArmActionServer(Node):
         while True:
             all_done = True
             for name in target_joints:
+                if 'gripper' in name:  # 그리퍼는 파지 시 목표 미달이 정상 → 대기 제외
+                    continue
                 dxl_id = joint_name_to_id[name]
                 if dxl_id not in last_goal_pulses:
                     continue

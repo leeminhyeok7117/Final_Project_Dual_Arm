@@ -345,7 +345,7 @@
         <parent link="R_2" />
         <child link="R_3" />
         <axis xyz="0.9396930000000002 -8.431443962615327e-33 0.34202000000000005" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.32" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.40" />
     </joint>
 
     <!-- R_4: elbow pitch        | -120° ~ +10° -->
@@ -409,7 +409,7 @@
         <parent link="L_2" />
         <child link="L_3" />
         <axis xyz="-0.9396930000000002 -8.431443962615327e-33 -0.34202000000000005" />
-        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.32" />
+        <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="0.40" />
     </joint>
 
     <!-- L_4: elbow pitch        | -120° ~ +10° -->
