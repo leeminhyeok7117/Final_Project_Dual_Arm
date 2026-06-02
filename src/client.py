@@ -618,14 +618,17 @@ class DualArmActionClient(Node):
         signs     = np.sign(dp)
         reversals = int(np.sum(np.abs(np.diff(signs, axis=0)) > 1)) if len(signs) > 1 else 0
 
-        # 시계열 데이터 (시간 중점값 기준)
-        vel_t   = ((t[:-1] + t[1:]) / 2).tolist()
-        vel_rms = np.sqrt(np.mean(vel ** 2, axis=1)).tolist()
-        if len(acc) > 0:
-            acc_t   = ((t[1:-1] + t[2:]) / 2).tolist()
-            acc_rms = np.sqrt(np.mean(acc ** 2, axis=1)).tolist()
-        else:
-            acc_t, acc_rms = [], []
+        # ── 선형성(흔들림) 지수: 각 관절이 시작→끝 직선에서 벗어난 정도 ──────────
+        # 직선 보간 대비 RMS 편차 / 이동량  → PTP≈0(직선), RRTConnect는 큼
+        tn = (t - t[0]) / max(t[-1] - t[0], 1e-6)   # 0~1 정규화 시간
+        jitter_per_joint = []
+        for j in range(nj):
+            line = pos[0, j] + (pos[-1, j] - pos[0, j]) * tn
+            dev  = pos[:, j] - line
+            rng  = abs(pos[-1, j] - pos[0, j])
+            jitter_per_joint.append(
+                float(np.sqrt(np.mean(dev ** 2)) / max(rng, 1e-3)))
+        jitter_index = float(np.mean(jitter_per_joint))
 
         return {
             'step':         step_idx + 1,
@@ -639,10 +642,10 @@ class DualArmActionClient(Node):
             'jerk_rms':     round(jerk_rms, 4),
             'reversals':    reversals,
             'duration':     round(float(t[-1] - t[0]), 4),
-            'vel_t':        vel_t,
-            'vel_rms':      vel_rms,
-            'acc_t':        acc_t,
-            'acc_rms':      acc_rms,
+            'jitter_index': round(jitter_index, 4),
+            'joint_names':  names,
+            'pos_t':        [round(x, 4) for x in t.tolist()],
+            'pos':          [[round(v, 4) for v in row] for row in pos.tolist()],
         }
 
     def _save_metrics(self):
