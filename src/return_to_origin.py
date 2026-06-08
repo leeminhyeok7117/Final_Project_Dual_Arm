@@ -12,7 +12,7 @@ return_to_origin.py
     import return_to_origin as rto
     rto.register(port_handler, packet_handler)  # 스크립트 초반에 한 번
     ...
-    rto.return_to_origin()   # 종료 시 — 포트 닫지 않고 기존 핸들러 사용
+    rto.return_to_origin()   # 종료 시  포트 닫지 않고 기존 핸들러 사용
 """
 
 import time
@@ -52,11 +52,11 @@ def return_to_origin(timeout: float = 15.0):
     own_port = False  # 이 함수에서 직접 연 포트인지 여부
 
     if _port_handler is None:
-        # 등록된 핸들러 없음 → 직접 포트 열기
+        # 등록된 핸들러 없음  직접 포트 열기
         _port_handler   = PortHandler(DXL_PORT)
         _packet_handler = PacketHandler(PROTOCOL_VERSION)
         if not _port_handler.openPort():
-            print("[원점 복귀] ❌ 포트 열기 실패 — 복귀를 건너뜁니다.")
+            print("[원점 복귀] 포트 열기 실패 복귀를 건너뜁니다.")
             _port_handler = _packet_handler = None
             return
         _port_handler.setBaudRate(DXL_BAUDRATE)
@@ -112,10 +112,10 @@ def return_to_origin(timeout: float = 15.0):
                 print(f"\r  [{label}] 오차(ticks) | {' | '.join(status_parts)} |", end='', flush=True)
 
                 if all_done:
-                    print(f"\n[원점 복귀] ✅ {label} 완료!")
+                    print(f"\n[원점 복귀] {label} 완료!")
                     break
                 if time.time() - start > timeout:
-                    print(f"\n[원점 복귀] ⚠️  {label} 타임아웃 — 일부 모터 미달.")
+                    print(f"\n[원점 복귀] {label} 타임아웃 일부 모터 미달.")
                     break
                 time.sleep(0.05)
 

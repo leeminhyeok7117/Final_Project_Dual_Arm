@@ -5,8 +5,8 @@ command_server.py
 다른 컴퓨터에서 TCP로 JSON 명령을 받아 /scenario_trigger 토픽으로 변환한다.
 
 수신 JSON 예시:
-  {"command": "package_start"}    → 시나리오 1
-  {"command": "package_complete"} → 시나리오 2
+  {"command": "package_start"}     시나리오 1
+  {"command": "package_complete"}  시나리오 2
 
 송신 응답:
   {"status": "ok", "scenario": 1}
@@ -57,7 +57,7 @@ class CommandServer(Node):
 
         t = threading.Thread(target=self._run_server, daemon=True)
         t.start()
-        self.get_logger().info(f'✅ Command server 시작 — {HOST}:{PORT} 대기 중')
+        self.get_logger().info(f'Command server 시작 {HOST}:{PORT} 대기 중')
 
     def _run_server(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
@@ -85,12 +85,12 @@ class CommandServer(Node):
 
                 if command == 'package_start':
                     self._pub.publish(Int32(data=1))
-                    self.get_logger().info(f'[{addr[0]}] package_start → 시나리오 1 트리거')
+                    self.get_logger().info(f'[{addr[0]}] package_start 시나리오 1 트리거')
                     conn.sendall(json.dumps({'status': 'ok', 'scenario': 1}).encode())
 
                 elif command == 'package_complete':
                     self._pub.publish(Int32(data=2))
-                    self.get_logger().info(f'[{addr[0]}] package_complete → 시나리오 2 트리거')
+                    self.get_logger().info(f'[{addr[0]}] package_complete 시나리오 2 트리거')
                     conn.sendall(json.dumps({'status': 'ok', 'scenario': 2}).encode())
 
                 else:

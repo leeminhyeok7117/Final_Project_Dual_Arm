@@ -27,14 +27,14 @@ TICKS_PER_REV = 4096
 # 모터별 원점 위치 (엔코더 절대값)
 #
 # [기어 모터] reboot 후 멀티턴 리셋되므로 한 바퀴 내 위치로 mod 처리
-#   Motor 1: 실측 원점 raw = -9900  →  -9900 % 4096 = 2388
+#   Motor 1: 실측 원점 raw = -9900    -9900 % 4096 = 2388
 #   Motor 2: 기본 원점 2048 (실측값 없음, 필요시 교체)
 #   Motor 3: 기본 원점 2048
-#   Motor 4: 실측 원점 raw = -2503  →  -2503 % 4096 = 1593
+#   Motor 4: 실측 원점 raw = -2503    -2503 % 4096 = 1593
 #   Motor 11~14: 왼팔, 기본 2048 (필요시 교체)
 #
 # [일반 모터]
-#   Motor 6: 2048 기준 +80° → 2048 + round(80 * 4096 / 360) = 2958
+#   Motor 6: 2048 기준 +80°  2048 + round(80 * 4096 / 360) = 2958
 #            방향이 반대라면 2048 - 910 = 1138 로 수정
 #   나머지 일반 모터: 기본 2048
 # ─────────────────────────────────────────────────────────────
@@ -114,12 +114,12 @@ def jog_motor(dxl_id, direction):
     target_pos  = current_pos + (JOG_STEP * direction)
     write_pos   = target_pos & 0xFFFFFFFF
     packetHandler.write4ByteTxRx(portHandler, dxl_id, ADDR_GOAL_POSITION, write_pos)
-    print(f"\r[{dxl_id}번 모터] 현재위치: {current_pos} -> 목표위치: {target_pos}        ", end="")
+    print(f"\r[{dxl_id}번 모터] 현재위치: {current_pos} -> 목표위치: {target_pos} ", end="")
 
 
 def reboot_and_home_geared(dxl_id):
     """
-    기어 모터 reboot → EXT_POSITION 재설정 → 모터별 원점으로 이동
+    기어 모터 reboot  EXT_POSITION 재설정  모터별 원점으로 이동
     reboot 시 멀티턴 카운터가 리셋되므로 MOTOR_HOME은 0~4095 범위 값이어야 함
     """
     home = MOTOR_HOME.get(dxl_id, 2048)
@@ -151,16 +151,16 @@ def home_normal_motors(arm):
 
 def go_all_home():
     """
-    전체 모터 reboot → 모드 재설정 → GroupSyncWrite로 동시 원점 이동
+    전체 모터 reboot  모드 재설정  GroupSyncWrite로 동시 원점 이동
     """
     print("\n\n--- 전체 모터 리부트 및 원점 복귀 시작 ---")
 
     # 1. 전체 리부트
     for dxl_id in MOTOR_HOME:
-        print(f"  [{dxl_id}번] 리부트 중...", end=" ", flush=True)
+        print(f"[{dxl_id}번] 리부트 중...", end=" ", flush=True)
         packetHandler.reboot(portHandler, dxl_id)
         print("완료")
-    print("  전체 리부트 완료. 1.5초 대기...")
+    print("전체 리부트 완료. 1.5초 대기...")
     time.sleep(0.5)
 
     # 2. 모드 재설정 (기어: EXT_POSITION / 일반: POSITION)
@@ -171,7 +171,7 @@ def go_all_home():
         if dxl_id not in ALL_GEARED:
             packetHandler.write4ByteTxRx(portHandler, dxl_id, ADDR_PROFILE_VELOCITY, 50)
         packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
-        print(f"  [{dxl_id}번] 모드={'EXT_POS' if mode == OP_MODE_EXT_POSITION else 'POSITION'} 설정 완료")
+        print(f"[{dxl_id}번] 모드={'EXT_POS' if mode == OP_MODE_EXT_POSITION else 'POSITION'} 설정 완료")
 
     # 3. GroupSyncWrite로 동시 원점 이동
     groupSyncWrite = GroupSyncWrite(
@@ -188,15 +188,15 @@ def go_all_home():
             DXL_HIBYTE(DXL_HIWORD(home_val)),
         ]
         if not groupSyncWrite.addParam(dxl_id, param):
-            print(f"  [경고] 모터 {dxl_id} 파라미터 추가 실패")
+            print(f"[경고] 모터 {dxl_id} 파라미터 추가 실패")
 
     comm_result = groupSyncWrite.txPacket()
     if comm_result != COMM_SUCCESS:
-        print(f"  [오류] SyncWrite 실패: {packetHandler.getTxRxResult(comm_result)}")
+        print(f"[오류] SyncWrite 실패: {packetHandler.getTxRxResult(comm_result)}")
     else:
-        print("\n  전체 모터 원점 이동 명령 전송 완료.")
+        print("\n 전체 모터 원점 이동 명령 전송 완료.")
         for dxl_id, home in sorted(MOTOR_HOME.items()):
-            print(f"    모터 {dxl_id:>3}: {home} ticks")
+            print(f"모터 {dxl_id:>3}: {home} ticks")
 
     groupSyncWrite.clearParam()
 
@@ -205,25 +205,25 @@ def calibrate_origin():
 
     # 시작 시 MOTOR_HOME 테이블 출력
     print("\n=== 모터별 원점 위치 테이블 ===")
-    print(f"  {'ID':>4} | {'원점(ticks)':>11} | {'원점(°, 2048기준)':>18}")
-    print(f"  {'─'*4}-+-{'─'*11}-+-{'─'*18}")
+    print(f"{'ID':>4} | {'원점(ticks)':>11} | {'원점(°, 2048기준)':>18}")
+    print(f"{'─'*4}-+-{'─'*11}-+-{'─'*18}")
     for mid, home in sorted(MOTOR_HOME.items()):
         deg = (home - 2048) * 360.0 / TICKS_PER_REV
-        print(f"  {mid:>4} | {home:>11} | {deg:>+17.2f}°")
+        print(f"{mid:>4} | {home:>11} | {deg:>+17.2f}°")
     print()
 
     print("\n=======================================================")
-    print("      양팔 키보드 수동 원점 정렬 (Dual-Arm Homing)      ")
+    print("양팔 키보드 수동 원점 정렬 (Dual-Arm Homing) ")
     print("=======================================================")
-    print(" [ R ] : 오른팔 모드 (모터 1-8)   기본값")
-    print(" [ L ] : 왼팔 모드  (모터 11-18)")
-    print(" [ 1, 2, 3, 4 ] : 기어 모터 선택")
-    print(" [ a ] / [ d ] : 선택한 모터 시계 반대 / 시계 방향으로 회전")
-    print(" [ r ] : 선택한 모터 멀티턴 초기화(Reboot) → 모터별 원점으로 이동")
-    print(" [ h ] : 현재 팔의 일반 모터 원점 복귀")
-    print("    오른팔: 모터 5, 6, 7, 8  /  왼팔: 모터 15, 16, 17, 18")
-    print(" [ q ] : 프로그램 종료")
-    print(" [ z ] : 전체 모터 동시 원점 복귀 (MOTOR_HOME 기준)")
+    print("[ R ] : 오른팔 모드 (모터 1-8) 기본값")
+    print("[ L ] : 왼팔 모드 (모터 11-18)")
+    print("[ 1, 2, 3, 4 ] : 기어 모터 선택")
+    print("[ a ] / [ d ] : 선택한 모터 시계 반대 / 시계 방향으로 회전")
+    print("[ r ] : 선택한 모터 멀티턴 초기화(Reboot) 모터별 원점으로 이동")
+    print("[ h ] : 현재 팔의 일반 모터 원점 복귀")
+    print("오른팔: 모터 5, 6, 7, 8 / 왼팔: 모터 15, 16, 17, 18")
+    print("[ q ] : 프로그램 종료")
+    print("[ z ] : 전체 모터 동시 원점 복귀 (MOTOR_HOME 기준)")
     print("=======================================================\n")
 
     arm_mode       = 'right'

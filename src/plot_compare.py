@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-플래너 안정성 비교 — 관절 위치가 시간에 따라 얼마나 매끄럽게(선형적으로) 변하는가
+플래너 안정성 비교  관절 위치가 시간에 따라 얼마나 매끄럽게(선형적으로) 변하는가
 
 단독 실행:  python3 plot_compare.py metrics_ptp_rrtstar_s1.json
 비교 실행:  python3 plot_compare.py metrics_ptp_rrtstar_s1.json metrics_rrtconnect_s1.json
@@ -81,8 +81,8 @@ def draw_panel(ax, steps, config, show_legend=False):
 
     ji = jitter_avg(steps)
     ax.set_title(
-        f'{L[config]}    —    흔들림 지수 {ji:.3f}'
-        f'  ({"매끄러움 ✓" if ji < 0.05 else "흔들림 큼 ✗"})',
+        f'{L[config]}    |    흔들림 지수 {ji:.3f}'
+        f'  ({"안정" if ji < 0.05 else "불안정"})',
         fontweight='bold', fontsize=12, pad=8)
     ax.set_ylabel('관절 각도 (도)', fontsize=10)
     ax.grid(True, linestyle='--', alpha=0.45, zorder=0)
@@ -108,7 +108,7 @@ def main():
 
     if cb:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 10), sharey=True)
-        fig.suptitle('플래너 안정성 비교 — 관절 위치가 시간에 따라 매끄럽게 변하는가',
+        fig.suptitle('플래너 안정성 비교  관절 위치가 시간에 따라 매끄럽게 변하는가',
                      fontsize=15, fontweight='bold', y=0.98)
         draw_panel(ax1, sa, ca, show_legend=False)
         draw_panel(ax2, sb, cb, show_legend=True)
@@ -120,7 +120,7 @@ def main():
         plt.subplots_adjust(left=0.07, right=0.97, top=0.91, bottom=0.13, hspace=0.30)
     else:
         fig, ax1 = plt.subplots(1, 1, figsize=(16, 6))
-        fig.suptitle('관절 위치 시계열 — 시간에 따른 변화',
+        fig.suptitle('관절 위치 시계열  시간에 따른 변화',
                      fontsize=15, fontweight='bold', y=0.98)
         draw_panel(ax1, sa, ca, show_legend=True)
         ax1.set_xlabel('시간 (초, 스텝 누적)', fontsize=10)
@@ -128,7 +128,7 @@ def main():
 
     out = sys.argv[1].replace('.json', '_stability.png')
     plt.savefig(out, dpi=150, bbox_inches='tight')
-    print(f'✅ 그래프 저장: {out}')
+    print(f'그래프 저장: {out}')
     try:
         plt.show()
     except Exception:

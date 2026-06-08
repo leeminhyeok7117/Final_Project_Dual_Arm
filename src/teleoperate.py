@@ -10,8 +10,8 @@ import gripper_guard
 import calibrate_origin_keyboard as calib
 
 # --- 포트 설정 ---
-LEADER_PORT   = '/dev/ttyUSB1'   # 리더  (21~27)
-FOLLOWER_PORT = '/dev/ttyUSB0'   # 팔로워 (1~7)
+LEADER_PORT   = '/dev/ttyUSB1'# 리더  (21~27)
+FOLLOWER_PORT = '/dev/ttyUSB0'# 팔로워 (1~7)
 BAUDRATE      = 1000000
 
 LEADER_IDS   = [11, 12, 13, 14, 15, 16, 17, 18]
@@ -64,10 +64,10 @@ class TeleopNode(Node):
         gripper_guard.register(self.follower_ph, self.packetHandler)
         gripper_guard.start(dxl_id=7, threshold_percent=80)
 
-        self.get_logger().info('✅ Teleop 준비 완료! Leader(21~27)를 움직여보세요.')
+        self.get_logger().info('Teleop 준비 완료! Leader(21~27)를 움직여보세요.')
 
     def _home_leaders(self):
-        self.get_logger().info('🏠 Leader 원점 복귀 중...')
+        self.get_logger().info('Leader 원점 복귀 중...')
         ph = self.leader_ph
         pk = self.packetHandler
 
@@ -96,10 +96,10 @@ class TeleopNode(Node):
                     all_done = False
                     break
             if all_done:
-                self.get_logger().info('✅ Leader 원점 복귀 완료!')
+                self.get_logger().info('Leader 원점 복귀 완료!')
                 break
             if (time.time() - t_start) > LEADER_HOME_TIMEOUT:
-                self.get_logger().warn('⚠️ Leader 홈 복귀 타임아웃')
+                self.get_logger().warn('Leader 홈 복귀 타임아웃')
                 break
             time.sleep(0.02)
 

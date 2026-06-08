@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-gripper_guard.py — 그리퍼 부하 감시
+gripper_guard.py  그리퍼 부하 감시
 
 두 가지 모드 지원:
 
@@ -55,14 +55,14 @@ def configure(dxl_id_: int, threshold_percent: float = 80.0, debounce_count: int
     _debounce  = debounce_count
     _count     = 0
     _held      = False
-    print(f'[그리퍼 가드] ✅ 설정 — ID{dxl_id_}, 임계값 {threshold_percent:.0f}%, '
+    print(f'[그리퍼 가드] 설정 ID{dxl_id_}, 임계값 {threshold_percent:.0f}%, '
           f'디바운스 {debounce_count}회')
 
 
 def check(load_percent: float) -> bool:
     """
     부하값(%)을 받아 과부하 여부 반환.
-    True → 호출 측에서 현재 위치를 Goal Position에 써서 고정.
+    True  호출 측에서 현재 위치를 Goal Position에 써서 고정.
     """
     global _count, _held
 
@@ -71,12 +71,12 @@ def check(load_percent: float) -> bool:
         if _count >= _debounce:
             if not _held:
                 _held = True
-                print(f'\n[그리퍼 가드] ⚠️  과부하 {load_percent:+.1f}% '
-                      f'({_count}회 지속) → ID{dxl_id} 고정')
+                print(f'\n[그리퍼 가드] 과부하 {load_percent:+.1f}% '
+                      f'({_count}회 지속)  ID{dxl_id} 고정')
             return True
     else:
         if _held:
-            print(f'\n[그리퍼 가드] ✅ 부하 정상 ({load_percent:+.1f}%) — 잠금 해제')
+            print(f'\n[그리퍼 가드] 부하 정상 ({load_percent:+.1f}%) 잠금 해제')
         _count = 0
         _held  = False
 
@@ -92,8 +92,8 @@ def start_with_callbacks(load_fn, freeze_fn,
                          debounce_count: int = 8,
                          poll_hz: float = 20.0):
     """
-    load_fn  : () -> float  — 현재 그리퍼 부하 절댓값 반환 (raw 단위)
-    freeze_fn: () -> None   — 과부하 감지 시 호출, 그리퍼 고정 처리
+    load_fn  : () -> float   현재 그리퍼 부하 절댓값 반환 (raw 단위)
+    freeze_fn: () -> None    과부하 감지 시 호출, 그리퍼 고정 처리
     threshold: raw 단위 임계값 (XL430 기준 최대 1000, 기본 650 ≈ 65%)
     """
     global _thread, _cb_threshold, _cb_debounce
@@ -107,7 +107,7 @@ def start_with_callbacks(load_fn, freeze_fn,
         args=(load_fn, freeze_fn, poll_hz),
         daemon=True, name='GripperGuard')
     _thread.start()
-    print(f'[그리퍼 가드] 콜백 모드 시작 — 임계값 {threshold:.0f}, '
+    print(f'[그리퍼 가드] 콜백 모드 시작 임계값 {threshold:.0f}, '
           f'디바운스 {debounce_count}회, {poll_hz:.0f}Hz')
 
 
@@ -134,14 +134,14 @@ def _callback_loop(load_fn, freeze_fn, poll_hz: float):
             _cb_count += 1
             if _cb_count >= _cb_debounce and not _cb_held:
                 _cb_held = True
-                print(f'\n[그리퍼 가드] ⚠️  과부하 {load:.0f} ({_cb_count}회 지속) → 고정')
+                print(f'\n[그리퍼 가드] 과부하 {load:.0f} ({_cb_count}회 지속) 고정')
                 try:
                     freeze_fn()
                 except Exception as e:
                     print(f'[그리퍼 가드] freeze 실패: {e}')
         else:
             if _cb_held:
-                print(f'\n[그리퍼 가드] ✅ 부하 정상 ({load:.0f}) — 잠금 해제')
+                print(f'\n[그리퍼 가드] 부하 정상 ({load:.0f}) 잠금 해제')
             _cb_count = 0
             _cb_held  = False
 

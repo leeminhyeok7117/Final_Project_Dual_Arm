@@ -7,7 +7,7 @@ fixed to the 'base' frame. Republishes every 5 s to survive move_group
 restarts.
 
 Adjust DESK_POSITION to shift the desk in the 'base' frame (metres).
-The STL is in millimetres — converted automatically.
+The STL is in millimetres  converted automatically.
 """
 
 import struct
@@ -21,7 +21,7 @@ STL_PATH      = '/home/lmh/desk.stl'
 MM_TO_M       = 0.001
 PUBLISH_EVERY = 5.0   # seconds
 
-# ── Adjust these to position the desk relative to 'base' (metres) ────────────
+# ── Adjust these to position the desk relative to 'base'(metres) ────────────
 DESK_POSITION   = (0.54,  0.0,  -0.45)      # x, y, z
 DESK_QUATERNION = (0.0,  0.0,  0.7071, 0.7071)  # z축 90도 회전
 
