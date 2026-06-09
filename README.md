@@ -113,7 +113,6 @@ TCP/JSON  --scenario-->  MoveIt 2                  -->  FollowJointTrajectory  -
 | 왼팔 J1–J7 + 그리퍼 | 11–18 | 15, 15, 9, 9, 1, 1, 1, 1 |
 
 - 단일 USB-시리얼 버스, Baudrate 1,000,000
-- 그리퍼: Current-Based Position Control 모드
 
 ---
 
