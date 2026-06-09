@@ -16,7 +16,7 @@ ROS2 Humble + MoveIt2 기반 7-DOF Dual-Arm Manipulator 제어 시스템.
 | 항목 | 내용 |
 |---|---|
 | 로봇 | 7-DOF × 2 (좌/우) 양팔 + 그리퍼 2개 |
-| 미들웨어 | ROS 2 Humble |
+| 미들웨어 | ROS 2 Humble, Fast DDS |
 | 모션 플래닝 | MoveIt 2 (Pilz PTP, OMPL RRT*, RRTConnect) |
 | 구동 | ROBOTIS DYNAMIXEL XL430 (DYNAMIXEL SDK) |
 | 통신 | 단일 시리얼 버스, GroupSyncRead / GroupSyncWrite |
@@ -98,7 +98,7 @@ TCP/JSON  --scenario-->  MoveIt 2                  -->  FollowJointTrajectory  -
 ## 기술 스택
 
 - **언어**: Python 3.10
-- **미들웨어**: ROS 2 Humble, DDS
+- **미들웨어**: ROS 2 Humble, Fast DDS
 - **플래닝**: MoveIt 2, Pilz Industrial Motion Planner, OMPL
 - **하드웨어 제어**: DYNAMIXEL SDK
 - **분석**: NumPy, Matplotlib
