@@ -1,4 +1,4 @@
-# Dual-Arm Manipulator — 졸업작품
+# Dual-Arm Manipulator (Graduation Work)
 
 ROS2 Humble + MoveIt2 기반 7-DOF Dual-Arm Manipulator 제어 시스템.
 
