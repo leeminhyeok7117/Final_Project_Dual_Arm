@@ -1,8 +1,8 @@
 # Dual-Arm Manipulator — ROS 2 / MoveIt 2 / DYNAMIXEL
 
-ROS 2 Humble + MoveIt 2 기반 7-DOF 양팔 매니퓰레이터 제어 시스템.
-모션 플래닝(MoveIt 2)과 실 하드웨어 구동(DYNAMIXEL)을 분리된 계층으로 직접 연동하고,
-실 로봇 환경에서의 과부하·통신 경합·복구를 처리하도록 설계했습니다.
+ROS2 Humble + MoveIt2 기반 7-DOF 양팔 매니퓰레이터 제어 시스템.
+모션 플래닝(MoveIt 2)과 실 하드웨어 구동(DYNAMIXEL)을 분리된 계층으로 직접 연동
+실제 로봇 환경에서의 과부하·통신 경합·복구를 처리하도록 설계
 
 <!-- 권장 이미지 (1) 히어로: 실제 양팔 로봇 정면 전체 사진. 가능하면 그리퍼로 물체를 잡고 있는 컷 -->
 ![Dual-Arm Robot](docs/images/robot_overview.jpg)
