@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-scene_publisher.py
-
-Loads desk.stl and publishes it as a permanent MoveIt2 collision object
-fixed to the 'base' frame. Republishes every 5 s to survive move_group
-restarts.
-
-Adjust DESK_POSITION to shift the desk in the 'base' frame (metres).
-The STL is in millimetres  converted automatically.
-"""
-
+# 책상 지속적 publish 용도
 import struct
 import rclpy
 from rclpy.node import Node
@@ -19,9 +9,8 @@ from moveit_msgs.msg import CollisionObject, PlanningScene
 
 STL_PATH      = '/home/lmh/desk.stl'
 MM_TO_M       = 0.001
-PUBLISH_EVERY = 5.0   # seconds
+PUBLISH_EVERY = 5.0   
 
-# ── Adjust these to position the desk relative to 'base'(metres) ────────────
 DESK_POSITION   = (0.54,  0.0,  -0.45)      # x, y, z
 DESK_QUATERNION = (0.0,  0.0,  0.7071, 0.7071)  # z축 90도 회전
 
@@ -54,7 +43,6 @@ def _parse_binary_stl(path: str) -> Mesh:
                       for t in triangles]
     return mesh
 
-
 class ScenePublisher(Node):
     def __init__(self):
         super().__init__('scene_publisher')
@@ -64,7 +52,6 @@ class ScenePublisher(Node):
             f'Desk: {len(self._mesh.vertices)} vertices, '
             f'{len(self._mesh.triangles)} triangles')
 
-        # First publish after 1 s (move_group may not be up yet), then every 5 s
         self.create_timer(1.0, self._publish)
         self.create_timer(PUBLISH_EVERY, self._publish)
 
@@ -93,13 +80,11 @@ class ScenePublisher(Node):
         self._pub.publish(ps)
         self.get_logger().debug('Desk published to /planning_scene')
 
-
 def main():
     rclpy.init()
     node = ScenePublisher()
     rclpy.spin(node)
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

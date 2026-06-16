@@ -28,10 +28,9 @@ install(PROGRAMS
   src/teleoperate.py
   src/return_to_origin.py
   src/gripper_guard.py
-  src/trajectory_recorder.py
-  src/trajectory_player.py
   src/scene_publisher.py
   src/command_server.py
+  src/motion_play.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

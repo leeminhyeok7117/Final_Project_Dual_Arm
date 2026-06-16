@@ -40,9 +40,7 @@ class DualArmActionClient(Node):
             self, FollowJointTrajectory,
             '/right_arm_hw/follow_joint_trajectory',
             callback_group=cb)
-        
-        # ── 시나리오 정의 ─────────────────────────────────────────────────────
-        # planner 키: 'PTP' | 'RRTConnect' | 'RRTstar'
+
         self._scenario1_left = [
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
             {'joints': deg(51, -49, 62, -13, 64, 28, -6), 'gripper': 2048,   'planner': 'PTP'},
@@ -78,10 +76,9 @@ class DualArmActionClient(Node):
             {'joints': deg(0, 0, 0,   0, 0, 0, 0), 'gripper': 2048,  'planner': 'PTP'},
             {'joints': deg(55, -5, 4, 1, 4, 5, 0), 'gripper': 2048,  'planner': 'PTP'},
             
-        ]  # 추후 정의
-        self._scenario2_right = []  # 추후 정의
+        ]  
+        self._scenario2_right = [] 
 
-        # ── 실행 상태 ─────────────────────────────────────────────────────────
         self.left_targets     = []
         self.right_targets    = []
         self.left_arm_joints  = ['L_1', 'L_2', 'L_3', 'L_4', 'L_5', 'L_6', 'L_7']
@@ -99,7 +96,6 @@ class DualArmActionClient(Node):
         self._left_done       = False
         self._right_done      = False
 
-        # ── 지표 수집 ─────────────────────────────────────────────────────────
         self._metrics_config  = metrics_config
         self._out_dir         = out_dir
         self._metrics_data    = []
@@ -121,7 +117,6 @@ class DualArmActionClient(Node):
         import threading
         threading.Thread(target=self._cli_input_loop, daemon=True).start()
 
-    # ── CLI 입력 루프 ────────────────────────────────────────────────────────
     def _cli_input_loop(self):
         while True:
             try:
@@ -135,7 +130,6 @@ class DualArmActionClient(Node):
             except EOFError:
                 break
 
-    # ── 시나리오 트리거 / 제어 ───────────────────────────────────────────────
     def _trigger_cb(self, msg: Int32):
         if self._running:
             self.get_logger().warn(f'이미 실행 중입니다. 시나리오 {msg.data} 무시')
@@ -180,18 +174,15 @@ class DualArmActionClient(Node):
             self.get_logger().info('시나리오 완료. 다음 트리거 대기 중...')
             self._save_metrics()
 
-    # ── 파지 물체 부착 / 해제 ────────────────────────────────────────────────
-    # L_7 기준 물체 위치/방향  직접 측정해서 조정
-    GRIPPER_TIP_OFFSET_X = -0.03   # 좌우 (m)
-    GRIPPER_TIP_OFFSET_Y = 0.00   # 앞뒤 (m)
-    GRIPPER_TIP_OFFSET_Z = 0.12   # L_7그리퍼 팁 거리 (m)
-    GRIPPER_ROLL_DEG     = 0.0    # X축 회전 (도)
-    GRIPPER_PITCH_DEG    = -21.0    # Y축 회전 (도)   조정
-    GRIPPER_YAW_DEG      = 0.0    # Z축 회전 (도)
+    GRIPPER_TIP_OFFSET_X = -0.03   
+    GRIPPER_TIP_OFFSET_Y = 0.00  
+    GRIPPER_TIP_OFFSET_Z = 0.12   
+    GRIPPER_ROLL_DEG     = 0.0   
+    GRIPPER_PITCH_DEG    = -21.0  
+    GRIPPER_YAW_DEG      = 0.0  
 
     def _attach_object(self, link: str, obj_id: str,
                        size=(0.26, 0.17, 0.03)):
-        """Box collision object를 link에 부착 (MoveIt 충돌 인식용)."""
         import math
         r = math.radians(self.GRIPPER_ROLL_DEG)
         p = math.radians(self.GRIPPER_PITCH_DEG)
@@ -222,7 +213,6 @@ class DualArmActionClient(Node):
         aco.object.operation           = CollisionObject.ADD
         aco.object.primitives          = [prim]
         aco.object.primitive_poses     = [pose]
-        # L_7(손목)과 L_6(그 윗 링크)를 허용  물체가 크면 L_6까지 겹칠 수 있음
         arm = 'L' if link.startswith('L') else 'R'
         aco.touch_links = [f'{arm}_6', f'{arm}_7', 'desk']
 
@@ -269,7 +259,6 @@ class DualArmActionClient(Node):
         self.get_logger().info('[SCENE] desk_blocker 제거')
 
     def _detach_object(self, link: str, obj_id: str):
-        """부착된 collision object 해제 + world에서도 제거."""
         aco = AttachedCollisionObject()
         aco.link_name        = link
         aco.object.id        = obj_id
@@ -286,7 +275,6 @@ class DualArmActionClient(Node):
         self._scene_pub.publish(ps)
         self.get_logger().info(f'[SCENE] {obj_id} 해제 및 world 제거')
 
-    # ── IK 요청 ─────────────────────────────────────────────────────────────
     def _request_ik(self, group_name, pose_data, prev_state, callback):
         tip_link = 'L_7' if group_name == 'left_arm' else 'R_7'
 
@@ -314,7 +302,6 @@ class DualArmActionClient(Node):
 
         self.ik_client.call_async(req).add_done_callback(callback)
 
-    # ── 궤적 계획 요청 ───────────────────────────────────────────────────────
     def _request_trajectory(self, group_name, arm_joints, target_positions, prev_state, callback,
                             planner='PTP'):
         if group_name == 'left_arm':
@@ -342,7 +329,6 @@ class DualArmActionClient(Node):
             req.motion_plan_request.planner_id            = "RRTConnect"
             req.motion_plan_request.num_planning_attempts = 10
         
-
         if prev_state is None:
             req.motion_plan_request.start_state.is_diff = True
         else:
@@ -361,7 +347,6 @@ class DualArmActionClient(Node):
 
         self.plan_client.call_async(req).add_done_callback(callback)
 
-    # ── 궤적 전송 + result 대기 ──────────────────────────────────────────────
     def _send_trajectory(self, action_client, plan_response, arm_joints, arm_name, result_callback,
                          gripper_joint=None, gripper_pos=0.0):
         jt = plan_response.motion_plan_response.trajectory.joint_trajectory
@@ -396,9 +381,6 @@ class DualArmActionClient(Node):
 
         action_client.send_goal_async(goal_msg).add_done_callback(_goal_response)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # 왼팔: IK  plan  send  result  다음 스텝
-    # ══════════════════════════════════════════════════════════════════════════
     def process_next_left(self, fallback=False, planner_override=None):
         if self.left_idx >= len(self.left_targets):
             self.get_logger().info('왼팔 모든 목표 완료!')
@@ -444,7 +426,7 @@ class DualArmActionClient(Node):
         if code != 1:
             target          = self.left_targets[self.left_idx]
             current_planner = target.get('planner', 'PTP')
-            # PTP 실패  RRTConnect로 폴백
+            # PTP 실패시 RRTConnect 사용
             if current_planner == 'PTP' and self.left_retry == 0:
                 self.get_logger().warn(
                     f'[LEFT] PTP 실패 (code={code}), RRTConnect로 폴백')
@@ -498,9 +480,6 @@ class DualArmActionClient(Node):
         self.left_idx += 1
         self.process_next_left()
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # 오른팔: IK  plan  send  result  다음 스텝
-    # ══════════════════════════════════════════════════════════════════════════
     def process_next_right(self, fallback=False, planner_override=None):
         if self.right_idx >= len(self.right_targets):
             self.get_logger().info('오른팔 모든 목표 완료!')
@@ -589,8 +568,6 @@ class DualArmActionClient(Node):
         self.right_idx += 1
         self.process_next_right()
 
-
-    # ── 지표 계산 ─────────────────────────────────────────────────────────────
     def _compute_traj_metrics(self, jt, plan_time, step_idx, arm, planner_used):
         pts = jt.points
         if len(pts) < 3:
@@ -620,9 +597,7 @@ class DualArmActionClient(Node):
         signs     = np.sign(dp)
         reversals = int(np.sum(np.abs(np.diff(signs, axis=0)) > 1)) if len(signs) > 1 else 0
 
-        # ── 선형성(흔들림) 지수: 각 관절이 시작끝 직선에서 벗어난 정도 ──────────
-        # 직선 보간 대비 RMS 편차 / 이동량   PTP≈0(직선), RRTConnect는 큼
-        tn = (t - t[0]) / max(t[-1] - t[0], 1e-6)   # 0~1 정규화 시간
+        tn = (t - t[0]) / max(t[-1] - t[0], 1e-6)  
         jitter_per_joint = []
         for j in range(nj):
             line = pos[0, j] + (pos[-1, j] - pos[0, j]) * tn
@@ -674,7 +649,6 @@ class DualArmActionClient(Node):
         else:
             subprocess.Popen(['python3', script, fpath])
 
-
 def main(args=None):
     import argparse
     ap = argparse.ArgumentParser(add_help=False)
@@ -695,7 +669,6 @@ def main(args=None):
         pass
     finally:
         print("\n[양팔 액션 클라이언트] 종료되었습니다.")
-
 
 if __name__ == '__main__':
     main()

@@ -23,49 +23,57 @@ OP_MODE_EXT_POSITION = 4
 
 TICKS_PER_REV = 4096
 
-# ─────────────────────────────────────────────────────────────
-# 모터별 원점 위치 (엔코더 절대값)
-#
-# [기어 모터] reboot 후 멀티턴 리셋되므로 한 바퀴 내 위치로 mod 처리
-#   Motor 1: 실측 원점 raw = -9900    -9900 % 4096 = 2388
-#   Motor 2: 기본 원점 2048 (실측값 없음, 필요시 교체)
-#   Motor 3: 기본 원점 2048
-#   Motor 4: 실측 원점 raw = -2503    -2503 % 4096 = 1593
-#   Motor 11~14: 왼팔, 기본 2048 (필요시 교체)
-#
-# [일반 모터]
-#   Motor 6: 2048 기준 +80°  2048 + round(80 * 4096 / 360) = 2958
-#            방향이 반대라면 2048 - 910 = 1138 로 수정
-#   나머지 일반 모터: 기본 2048
-# ─────────────────────────────────────────────────────────────
+# VLA용
+# MOTOR_HOME = {
+#     # 오른팔 기어 모터
+#     1:  (-9900) % TICKS_PER_REV,
+#     2:  2048,
+#     3:  2048,
+#     4:  (-2048) % TICKS_PER_REV,
+#     # 오른팔 일반 모터
+#     5:  2048,
+#     6:  2048,
+#     7:  2048 + round(80 * (2048*2/360)),
+#     8:  2048,
+#     # 왼팔 기어 모터 (부호 반전)
+#     11: (9900) % TICKS_PER_REV,                   # 2308
+#     12: 2048,
+#     13: 2048,
+#     14: (2048) % TICKS_PER_REV,                    # 3200
+#     # 왼팔 일반 모터 (방향 반전)
+#     15: 2048,
+#     16: 2048,           # 1138
+#     17: 2048 - round(80 * (2048*2/360)),
+#     18: 2048,
+# }
+
+#차렷자세
 MOTOR_HOME = {
     # 오른팔 기어 모터
-    1:  (-9900) % TICKS_PER_REV,
+    1:  2048,
     2:  2048,
     3:  2048,
-    4:  (-2048) % TICKS_PER_REV,
+    4:  2048,
     # 오른팔 일반 모터
     5:  2048,
     6:  2048,
-    7:  2048 + round(80 * (2048*2/360)),
+    7:  2048,
     8:  2048,
-    # 왼팔 기어 모터 (부호 반전)
-    11: (9900) % TICKS_PER_REV,                   # 2308
+    # 왼팔 기어 모터 
+    11: 2048,                  
     12: 2048,
     13: 2048,
-    14: (2048) % TICKS_PER_REV,                    # 3200
-    # 왼팔 일반 모터 (방향 반전)
+    14: 2048,                    
+    # 왼팔 일반 모터 
     15: 2048,
-    16: 2048,           # 1138
-    17: 2048 - round(80 * (2048*2/360)),
+    16: 2048,       
+    17: 2048,
     18: 2048,
 }
 
-# 오른팔 (Right): 모터 ID 1-7
 RIGHT_GEARED = [1, 2, 3, 4]
 RIGHT_NORMAL = [5, 6, 7, 8]
 
-# 왼팔 (Left): 모터 ID 11-17
 LEFT_GEARED  = [11, 12, 13, 14]
 LEFT_NORMAL  = [15, 16, 17, 18]
 
@@ -101,13 +109,11 @@ def setup():
         packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_OPERATING_MODE, OP_MODE_EXT_POSITION)
         packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
 
-
 def read_present_position(dxl_id):
     pos, _, _ = packetHandler.read4ByteTxRx(portHandler, dxl_id, ADDR_PRESENT_POSITION)
     if pos > 2147483647:
         pos -= 4294967296
     return pos
-
 
 def jog_motor(dxl_id, direction):
     current_pos = read_present_position(dxl_id)
@@ -116,12 +122,7 @@ def jog_motor(dxl_id, direction):
     packetHandler.write4ByteTxRx(portHandler, dxl_id, ADDR_GOAL_POSITION, write_pos)
     print(f"\r[{dxl_id}번 모터] 현재위치: {current_pos} -> 목표위치: {target_pos} ", end="")
 
-
 def reboot_and_home_geared(dxl_id):
-    """
-    기어 모터 reboot  EXT_POSITION 재설정  모터별 원점으로 이동
-    reboot 시 멀티턴 카운터가 리셋되므로 MOTOR_HOME은 0~4095 범위 값이어야 함
-    """
     home = MOTOR_HOME.get(dxl_id, 2048)
     print(f"\n\n[{dxl_id}번 모터] 재부팅 및 멀티턴 초기화를 진행합니다...")
     packetHandler.reboot(portHandler, dxl_id)
@@ -150,12 +151,8 @@ def home_normal_motors(arm):
         print(f"[{dxl_id}번 모터] 원점 {home} (ticks) 으로 이동 명령 전송 완료.")
 
 def go_all_home():
-    """
-    전체 모터 reboot  모드 재설정  GroupSyncWrite로 동시 원점 이동
-    """
     print("\n\n--- 전체 모터 리부트 및 원점 복귀 시작 ---")
 
-    # 1. 전체 리부트
     for dxl_id in MOTOR_HOME:
         print(f"[{dxl_id}번] 리부트 중...", end=" ", flush=True)
         packetHandler.reboot(portHandler, dxl_id)
@@ -163,7 +160,6 @@ def go_all_home():
     print("전체 리부트 완료. 1.5초 대기...")
     time.sleep(0.5)
 
-    # 2. 모드 재설정 (기어: EXT_POSITION / 일반: POSITION)
     for dxl_id in MOTOR_HOME:
         mode = OP_MODE_EXT_POSITION if dxl_id in ALL_GEARED else OP_MODE_POSITION
         packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
@@ -173,7 +169,6 @@ def go_all_home():
         packetHandler.write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
         print(f"[{dxl_id}번] 모드={'EXT_POS' if mode == OP_MODE_EXT_POSITION else 'POSITION'} 설정 완료")
 
-    # 3. GroupSyncWrite로 동시 원점 이동
     groupSyncWrite = GroupSyncWrite(
         portHandler, packetHandler,
         ADDR_GOAL_POSITION, 4
@@ -203,7 +198,6 @@ def go_all_home():
 def calibrate_origin():
     setup()
 
-    # 시작 시 MOTOR_HOME 테이블 출력
     print("\n=== 모터별 원점 위치 테이블 ===")
     print(f"{'ID':>4} | {'원점(ticks)':>11} | {'원점(°, 2048기준)':>18}")
     print(f"{'─'*4}-+-{'─'*11}-+-{'─'*18}")

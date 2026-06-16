@@ -64,7 +64,6 @@ def draw_panel(ax, steps, config, show_legend=False):
     names, st, sp, bounds = build_position_timeline(steps)
     nj = len(names)
 
-    # 스텝 경계 음영 (RRTstar / RRTConnect 구간만 살짝 강조)
     for t_s, t_e, step, planner in bounds:
         if planner == 'RRTstar':
             ax.axvspan(t_s, t_e, color='#FDE7EC', alpha=0.7, zorder=0)
@@ -74,7 +73,6 @@ def draw_panel(ax, steps, config, show_legend=False):
     if bounds:
         ax.axvline(bounds[-1][1], color='#DDDDDD', lw=0.6, zorder=1)
 
-    # 관절 위치 곡선
     for j in range(nj):
         ax.plot(st[j], np.degrees(sp[j]), color=JOINT_CMAP(j % 10),
                 lw=1.8, label=names[j], zorder=3)
@@ -92,7 +90,6 @@ def draw_panel(ax, steps, config, show_legend=False):
     if show_legend:
         ax.legend(ncol=nj, fontsize=8, loc='upper center',
                   bbox_to_anchor=(0.5, -0.16), framealpha=0.9)
-
 
 def main():
     if len(sys.argv) < 2:

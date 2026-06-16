@@ -1,24 +1,4 @@
 #!/usr/bin/env python3
-"""
-command_server.py
-
-다른 컴퓨터에서 TCP로 JSON 명령을 받아 /scenario_trigger 토픽으로 변환한다.
-
-수신 JSON 예시:
-  {"command": "package_start"}     시나리오 1
-  {"command": "package_complete"}  시나리오 2
-
-송신 응답:
-  {"status": "ok", "scenario": 1}
-  {"status": "error", "message": "..."}
-
-다른 컴퓨터에서 보내는 예시 (Python):
-  import socket, json
-  with socket.socket() as s:
-      s.connect(('로봇PC_IP', 8765))
-      s.sendall(json.dumps({"command": "package_start"}).encode())
-      print(s.recv(1024).decode())
-"""
 
 import json
 import socket
@@ -32,7 +12,6 @@ PORT = 8765
 
 
 def normalize_command(data_text: str) -> str:
-    """JSON 또는 plain text에서 명령어 문자열을 추출한다."""
     data_text = data_text.strip()
     try:
         data = json.loads(data_text)
@@ -104,13 +83,11 @@ class CommandServer(Node):
                 except Exception:
                     pass
 
-
 def main(args=None):
     rclpy.init(args=args)
     node = CommandServer()
     rclpy.spin(node)
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

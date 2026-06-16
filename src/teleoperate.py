@@ -3,22 +3,25 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 from dynamixel_sdk import *
+import json
 import math
+import threading
+import sys
+import tty
+import termios
 import time
-import gripper_guard
 
 import calibrate_origin_keyboard as calib
 
-# --- 포트 설정 ---
-LEADER_PORT   = '/dev/ttyUSB1'# 리더  (21~27)
-FOLLOWER_PORT = '/dev/ttyUSB0'# 팔로워 (1~7)
+LEADER_PORT   = '/dev/ttyUSB1'# 리더  
+FOLLOWER_PORT = '/dev/ttyUSB0'# 팔로워 
 BAUDRATE      = 1000000
 
-LEADER_IDS   = [11, 12, 13, 14, 15, 16, 17, 18]
+LEADER_IDS   = [21, 22, 23, 24, 25, 26, 27, 28]
 FOLLOWER_IDS = [1,  2,  3,  4,  5,  6,  7, 8]
 
-GEAR_RATIOS   = {1: 15, 2: 15, 3: 9, 4: 5, 5: 1, 6: 1, 7: 1, 8: 1}
-DIRECTION_MAP = {1: -1, 2: -1, 3: -1, 4: -1, 5: 1, 6: 1, 7: -1, 8: 1}
+GEAR_RATIOS   = {1: 15, 2: 15, 3: 9, 4: 9, 5: 1, 6: 1, 7: 1, 8: 1}
+DIRECTION_MAP = {1: -1, 2: -1, 3: -1, 4: -1, 5: 1, 6: 1, 7: 1, 8: 1}
 
 PROFILE_ACCEL = 20
 PROFILE_VEL   = 0
@@ -37,16 +40,17 @@ ADDR_PROFILE_VEL   = 112
 ADDR_GOAL_POSITION = 116
 ADDR_PRESENT_POS   = 132
 
+ARM_FOLLOWER_IDS = FOLLOWER_IDS[:7]  
+
 
 class TeleopNode(Node):
     def __init__(self, leader_port_handler, follower_port_handler, packet_handler):
         super().__init__('teleop_node')
 
-        self.leader_ph   = leader_port_handler
-        self.follower_ph = follower_port_handler
+        self.leader_ph     = leader_port_handler
+        self.follower_ph   = follower_port_handler
         self.packetHandler = packet_handler
 
-        # 팔로워용 SyncWrite는 팔로워 포트 핸들러 사용
         self.groupSyncWrite = GroupSyncWrite(
             self.follower_ph, self.packetHandler, ADDR_GOAL_POSITION, 4
         )
@@ -61,10 +65,67 @@ class TeleopNode(Node):
 
         self.initialize_robots()
         self.timer = self.create_timer(0.05, self.publish_leader_angles)
-        gripper_guard.register(self.follower_ph, self.packetHandler)
-        gripper_guard.start(dxl_id=7, threshold_percent=80)
 
-        self.get_logger().info('Teleop 준비 완료! Leader(21~27)를 움직여보세요.')
+        self._recording      = False
+        self._rec_frames     = []
+        self._rec_t0         = 0.0
+        self._rec_right_init = {}  
+
+        self._key_thread = threading.Thread(target=self._key_listener, daemon=True)
+        self._key_thread.start()
+
+        self.get_logger().info('Teleop 준비 완료! Leader(21~28)를 움직여보세요.')
+        self.get_logger().info('r: 기록 시작/중지   s: JSON 저장   Ctrl+C: 종료')
+
+    def _getch(self):
+        fd  = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            return sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+    def _key_listener(self):
+        import _thread
+        while rclpy.ok():
+            try:
+                key = self._getch()
+            except Exception:
+                break
+            if key == '\x03':          
+                _thread.interrupt_main()
+                break
+            elif key == 'r':
+                if not self._recording:
+                    self._rec_right_init = {
+                        f_id: self.follower_initial_pulses[f_id]
+                        for f_id in ARM_FOLLOWER_IDS
+                    }
+                    self._rec_frames = []
+                    self._rec_t0     = time.time()
+                    self._recording  = True
+                    print('\n[REC] 기록 시작 (r=중지, s=저장)')
+                else:
+                    self._recording = False
+                    dur = self._rec_frames[-1]['t'] if self._rec_frames else 0.0
+                    print(f'\n[REC] 기록 중지  {len(self._rec_frames)}프레임 / {dur:.2f}초')
+            elif key == 's':
+                self._save_motion()
+
+    def _save_motion(self):
+        if not self._rec_frames:
+            print('\n[REC] 저장할 프레임이 없습니다.')
+            return
+        fname = f'motion_{int(time.time())}.json'
+        data  = {
+            'right_initial': {str(k): v for k, v in self._rec_right_init.items()},
+            'frames': self._rec_frames,
+        }
+        with open(fname, 'w') as f:
+            json.dump(data, f, indent=2)
+        dur = self._rec_frames[-1]['t']
+        print(f'\n[REC] 저장 완료: {fname}  ({len(self._rec_frames)}프레임 / {dur:.2f}초)')
 
     def _home_leaders(self):
         self.get_logger().info('Leader 원점 복귀 중...')
@@ -76,7 +137,7 @@ class TeleopNode(Node):
             pk.write4ByteTxRx(ph, l_id, ADDR_PROFILE_VEL, LEADER_HOME_VELOCITY)
 
         for l_id in LEADER_IDS:
-            goal = LEADER_HOME_PULSE & 0xFFFFFFFF
+            goal  = LEADER_HOME_PULSE & 0xFFFFFFFF
             param = [
                 DXL_LOBYTE(DXL_LOWORD(goal)), DXL_HIBYTE(DXL_LOWORD(goal)),
                 DXL_LOBYTE(DXL_HIWORD(goal)), DXL_HIBYTE(DXL_HIWORD(goal)),
@@ -109,7 +170,6 @@ class TeleopNode(Node):
     def initialize_robots(self):
         self._home_leaders()
 
-        # 리더 영점 기록 (ACM1 포트)
         for l_id in LEADER_IDS:
             pos, _, _ = self.packetHandler.read4ByteTxRx(
                 self.leader_ph, l_id, ADDR_PRESENT_POS)
@@ -117,7 +177,6 @@ class TeleopNode(Node):
                 pos -= 4294967296
             self.leader_initial_pulses[l_id] = pos
 
-        # 팔로워 초기화 (ACM0 포트)
         for f_id in FOLLOWER_IDS:
             self.packetHandler.write4ByteTxRx(
                 self.follower_ph, f_id, ADDR_PROFILE_ACCEL, PROFILE_ACCEL)
@@ -132,7 +191,7 @@ class TeleopNode(Node):
             self.follower_initial_pulses[f_id] = pos
 
     def publish_leader_angles(self):
-        msg = Float64MultiArray()
+        msg        = Float64MultiArray()
         angles_deg = []
 
         for l_id in LEADER_IDS:
@@ -156,6 +215,7 @@ class TeleopNode(Node):
             self.get_logger().warn(f'각도 데이터 길이 불일치: {len(target_angles)}개')
             return
 
+        goal_pulses = {}
         for i, target_angle_deg in enumerate(target_angles):
             f_id = FOLLOWER_IDS[i]
             pulse_change = int(
@@ -164,10 +224,9 @@ class TeleopNode(Node):
             )
             goal_pulse = self.follower_initial_pulses[f_id] + pulse_change
 
-            if f_id == 7:
-                goal_pulse = max(2500, min(4000, goal_pulse))
+            goal_pulses[f_id] = goal_pulse
 
-            goal = goal_pulse & 0xFFFFFFFF
+            goal  = goal_pulse & 0xFFFFFFFF
             param = [
                 DXL_LOBYTE(DXL_LOWORD(goal)), DXL_HIBYTE(DXL_LOWORD(goal)),
                 DXL_LOBYTE(DXL_HIWORD(goal)), DXL_HIBYTE(DXL_HIWORD(goal)),
@@ -177,13 +236,19 @@ class TeleopNode(Node):
         self.groupSyncWrite.txPacket()
         self.groupSyncWrite.clearParam()
 
+        if self._recording:
+            t     = time.time() - self._rec_t0
+            frame = {
+                't':      round(t, 4),
+                'pulses': {str(fid): goal_pulses[fid] for fid in ARM_FOLLOWER_IDS},
+            }
+            self._rec_frames.append(frame)
+
 
 def main(args=None):
-    # 팔로워 포트 (calib는 기존 ACM0 사용)
     print("\n[알림] Follower 원점 정렬을 진행합니다.")
     follower_port_h, packet_h = calib.calibrate_origin()
 
-    # 리더 포트 별도 오픈
     leader_port_h = PortHandler(LEADER_PORT)
     if not leader_port_h.openPort():
         print(f'[ERROR] {LEADER_PORT} 포트 열기 실패')
