@@ -12,6 +12,7 @@ import termios
 import time
 
 import calibrate_origin_keyboard as calib
+from return_to_origin import return_to_origin
 
 LEADER_PORT   = '/dev/ttyUSB1'# 리더  
 FOLLOWER_PORT = '/dev/ttyUSB0'# 팔로워 
@@ -27,7 +28,7 @@ PROFILE_ACCEL = 20
 PROFILE_VEL   = 0
 
 LEADER_HOME_PULSE    = 2048
-LEADER_HOME_VELOCITY = 100
+LEADER_HOME_VELOCITY = 20
 LEADER_HOME_TIMEOUT  = 5.0
 LEADER_HOME_TOL      = 30
 
@@ -55,6 +56,7 @@ class TeleopNode(Node):
             self.follower_ph, self.packetHandler, ADDR_GOAL_POSITION, 4
         )
 
+        self.leader_home_pulses      = {21:2728, 22:2048, 23:2048, 24:2958, 25:2048, 26:2048, 27:2958, 28:2048}
         self.leader_initial_pulses   = {}
         self.follower_initial_pulses = {}
 
@@ -137,7 +139,8 @@ class TeleopNode(Node):
             pk.write4ByteTxRx(ph, l_id, ADDR_PROFILE_VEL, LEADER_HOME_VELOCITY)
 
         for l_id in LEADER_IDS:
-            goal  = LEADER_HOME_PULSE & 0xFFFFFFFF
+            target = self.leader_home_pulses.get(l_id, LEADER_HOME_PULSE)
+            goal  = target & 0xFFFFFFFF
             param = [
                 DXL_LOBYTE(DXL_LOWORD(goal)), DXL_HIBYTE(DXL_LOWORD(goal)),
                 DXL_LOBYTE(DXL_HIWORD(goal)), DXL_HIBYTE(DXL_HIWORD(goal)),
@@ -153,7 +156,8 @@ class TeleopNode(Node):
                     continue
                 if pos > 2147483647:
                     pos -= 4294967296
-                if abs(pos - LEADER_HOME_PULSE) > LEADER_HOME_TOL:
+                target = self.leader_home_pulses.get(l_id, LEADER_HOME_PULSE)
+                if abs(pos - target) > LEADER_HOME_TOL:
                     all_done = False
                     break
             if all_done:
@@ -224,6 +228,13 @@ class TeleopNode(Node):
             )
             goal_pulse = self.follower_initial_pulses[f_id] + pulse_change
 
+            # 4번 모터 범위 제한 (값은 직접 채우기, 둘 다 채워야 적용됨)
+            if f_id == 4:
+                MIN_4 = None   # TODO: 최소 pulse
+                MAX_4 = None   # TODO: 최대 pulse
+                if MIN_4 is not None and MAX_4 is not None:
+                    goal_pulse = max(MIN_4, min(MAX_4, goal_pulse))
+
             goal_pulses[f_id] = goal_pulse
 
             goal  = goal_pulse & 0xFFFFFFFF
@@ -274,6 +285,7 @@ def main(args=None):
             follower_port_h.closePort()
         if leader_port_h.is_open:
             leader_port_h.closePort()
+        return_to_origin()
         print("\n프로그램 종료.")
 
 
