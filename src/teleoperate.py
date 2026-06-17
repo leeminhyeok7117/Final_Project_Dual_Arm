@@ -235,6 +235,9 @@ class TeleopNode(Node):
                 if MIN_4 is not None and MAX_4 is not None:
                     goal_pulse = max(MIN_4, min(MAX_4, goal_pulse))
 
+            elif f_id == 8 and goal_pulse >= 3000:
+                goal_pulse = 3200
+
             goal_pulses[f_id] = goal_pulse
 
             goal  = goal_pulse & 0xFFFFFFFF
